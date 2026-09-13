@@ -1,0 +1,66 @@
+{
+  "wr": {
+    "slow_release": {
+      "name": "Release Package vs. Press",
+      "focus": "Get off the line faster against contact",
+      "description": "Line up vs a jam bag/partner at the LOS. Practice hesi-swim, one-arm rip, and hip-dip releases, resetting after each rep. 4 sets x 6 reps per release type."
+    },
+    "wide_break_radius": {
+      "name": "3-Cone Speed-Cut Drill",
+      "focus": "Tighten cuts and reduce false steps at the break",
+      "description": "Set 3 cones in an L. Sprint, plant, and cut at full speed focusing on a 3-step cut (not rounding). 6 reps, alternating break direction."
+    },
+    "rounded_route_stem": {
+      "name": "Stick-the-Foot Ladder Drill",
+      "focus": "Vertical stem discipline before the break",
+      "description": "Run a 45-degree stem to a marked depth cone, drive the plant foot straight into the ground, and snap the hips before breaking. Emphasize no drift off the vertical line pre-break."
+    },
+    "low_separation_at_catch": {
+      "name": "Route-and-Finish Tempo Drill",
+      "focus": "Maintain/create separation through the catch point",
+      "description": "Full-speed route vs. a trail defender with a QB throwing on rhythm. Focus on accelerating out of the break instead of settling, tracking the ball late."
+    },
+    "inconsistent_top_speed": {
+      "name": "Flying 20s",
+      "focus": "Long-speed development",
+      "description": "10-yard build-up into a timed 20-yard fly at max speed. 6-8 reps with full recovery, focus on arm drive and stride length."
+    },
+    "telegraphing_break": {
+      "name": "Mirror Release Drill",
+      "focus": "Disguise the break so the DB can't jump it",
+      "description": "Partner mirrors your first 5 steps. Practice keeping shoulders/eyes neutral (not dipping early) until the actual plant step."
+    }
+  },
+  "cb": {
+    "slow_transition": {
+      "name": "Backpedal-to-Drive (W-Drill)",
+      "focus": "React and close faster out of the backpedal",
+      "description": "Backpedal on a whistle/cone, then break at a 45-degree angle to a second cone, then to a third. Focus on hip snap and first-step quickness out of the plant, not the backpedal speed itself."
+    },
+    "over_committing_to_stem": {
+      "name": "Eyes-In Zone Read Drill",
+      "focus": "Stop guessing the route early",
+      "description": "Backpedal reading a QB/coach's shoulders instead of the WR's stem. React only to the throw/route break, not the release."
+    },
+    "poor_press_technique": {
+      "name": "Jam-and-Mirror Drill",
+      "focus": "Disrupt the release at the line",
+      "description": "Line up press vs a WR release partner. Practice a two-hand jam with proper base width and hip control, then mirror the release for 5 yards without opening the gate early."
+    },
+    "high_separation_allowed": {
+      "name": "Trail Technique Drill",
+      "focus": "Close the cushion through the route",
+      "description": "Run routes in trail position (slightly behind, inside leverage), working to close to a half-yard cushion by the top of the route without grabbing."
+    },
+    "grabby_at_break": {
+      "name": "Hands-Down Phase Drill",
+      "focus": "Play the man/ball without a penalty risk",
+      "description": "Mirror the WR's break with hands at the hip until the ball is thrown, then play through the hands only at the catch point."
+    },
+    "late_recognition": {
+      "name": "Route Recognition Reps",
+      "focus": "Faster pattern reading",
+      "description": "Watch cut-ups of the top 5 route stems for this opponent/position group; call out the route out loud within the first 3 steps of the stem."
+    }
+  }
+}
