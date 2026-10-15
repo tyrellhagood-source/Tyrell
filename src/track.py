@@ -1,9 +1,17 @@
 """Player detection + multi-object tracking.
 
-Uses a pretrained YOLOv8 person detector combined with ByteTrack (both bundled
-in ultralytics) to assign each person in the clip a persistent track ID (TID)
-across frames -- this is the piece that answers "can we at least track the
-two athletes in a 1-on-1 rep".
+Uses a pretrained YOLOv8 person detector combined with a multi-object
+tracker (both bundled in ultralytics) to assign each person in the clip a
+persistent track ID (TID) across frames -- this is the piece that answers
+"can we at least track the two athletes in a 1-on-1 rep".
+
+Default tracker is BoT-SORT, not ByteTrack: it folds in a camera-motion
+compensation step and an appearance-similarity cue on top of ByteTrack's
+motion matching, which holds IDs together noticeably better through the
+kind of contact/occlusion that's constant in football and basketball (two
+players colliding at a break, a screen, a pile). ByteTrack is still
+available (faster, slightly more ID switches) via `tracker="bytetrack.yaml"`
+for anyone who wants to compare the two on their own footage.
 
 No training required: YOLOv8's COCO-pretrained weights already detect the
 "person" class well enough for this use case. Jersey-number reading / true
@@ -24,8 +32,8 @@ PERSON_CLASS_ID = 0
 
 
 def run_tracking(video_path: str, model_path: str = "yolov8n.pt",
-                  conf: float = 0.35, tracker: str = "bytetrack.yaml"):
-    """Runs YOLO+ByteTrack over the whole video.
+                  conf: float = 0.35, tracker: str = "botsort.yaml"):
+    """Runs YOLO+BoT-SORT (or ByteTrack, if requested) over the whole video.
 
     Returns:
         tracks: dict[int, Track] keyed by track_id

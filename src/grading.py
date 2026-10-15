@@ -5,6 +5,15 @@ data/drills/drills_library.json.
 This is a transparent, tunable rubric (not a trained model) so it's easy to
 see exactly why a rep got the grade it did, and to recalibrate the weights
 once real graded reps are available to compare against.
+
+Football (WR/CB) only. Tracking, pose, and calibration (track.py,
+pose_features.py, calibration.py) are sport-agnostic and already work for
+basketball -- this rubric doesn't, because "break sharpness" and
+"separation created" don't mean the same thing for a basketball cut, and
+guessing a basketball grading rubric without knowing what a coach actually
+wants scored (a cut vs. a closeout vs. a screen read, etc.) would just be
+making numbers up. Write grade_offense_bball()/grade_defense_bball() here
+once that's defined.
 """
 import json
 import os

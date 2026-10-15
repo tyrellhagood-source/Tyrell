@@ -23,7 +23,11 @@ class Track:
 
 @dataclass
 class Calibration:
-    """Maps pixels to real-world yards using two reference points of known distance."""
+    """Simple fallback: maps pixels to real-world yards using a single known
+    distance (e.g. hash-to-hash), assuming a uniform scale across the frame.
+    No perspective correction -- for that, use calibration.FieldCalibration
+    with 4+ reference points instead.
+    """
     px_distance: float
     yard_distance: float
 
@@ -33,16 +37,29 @@ class Calibration:
             return 0.0
         return self.yard_distance / self.px_distance
 
+    def pixel_to_world(self, px: float, py: float):
+        """Same duck-typed interface as FieldCalibration.pixel_to_world, so
+        metrics.py can treat either calibration type identically. Differencing
+        two of these cancels the arbitrary origin, so a uniform scale from
+        (0, 0) is fine for distance/speed purposes even though it isn't a
+        real coordinate mapping.
+        """
+        ypp = self.yards_per_pixel
+        return px * ypp, py * ypp
+
 
 @dataclass
 class Situation:
     """Manually supplied game/rep context. Not derived from video -- input by the user."""
+    sport: str = "football"  # "football" | "basketball"
     down: Optional[int] = None
     distance: Optional[int] = None
     hash_mark: Optional[str] = None  # "left" | "middle" | "right"
     offense_formation: Optional[str] = None
-    coverage_call: Optional[str] = None  # if known/self-reported, e.g. "Cover 1"
-    level: str = "college"  # "high_school" | "college" | "nfl" -- used for grading benchmarks
+    coverage_call: Optional[str] = None  # if known/self-reported, e.g. "Cover 1" or "switch"
+    quarter_or_period: Optional[int] = None  # basketball
+    shot_clock: Optional[float] = None  # basketball, seconds remaining
+    level: str = "college"  # "high_school" | "college" | "nfl" / "nba" -- used for grading benchmarks
     notes: Optional[str] = None
 
 

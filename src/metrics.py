@@ -11,7 +11,10 @@ import math
 from dataclasses import dataclass, field
 from typing import Optional
 
-from schema import Calibration, Track
+from schema import Track
+
+# calibration is duck-typed: schema.Calibration or calibration.FieldCalibration,
+# both exposing .pixel_to_world(px, py) -- or None for an uncalibrated clip.
 
 MPH_PER_YPS = 2.04545  # yards/sec -> mph
 
@@ -27,11 +30,13 @@ def _smooth(series, window=5):
     return out
 
 
-def _to_yards(px_x, px_y, calibration: Optional[Calibration]):
+def _to_yards(px_x, px_y, calibration):
+    """calibration is either None, a schema.Calibration (single-ratio
+    fallback), or a calibration.FieldCalibration (homography, perspective-
+    correct) -- both of the latter two expose .pixel_to_world(px, py)."""
     if calibration is None:
         return px_x, px_y
-    ypp = calibration.yards_per_pixel
-    return px_x * ypp, px_y * ypp
+    return calibration.pixel_to_world(px_x, px_y)
 
 
 @dataclass
@@ -60,7 +65,7 @@ class CoverageMetrics:
     notes: list = field(default_factory=list)
 
 
-def _speed_series(track: Track, calibration: Optional[Calibration]):
+def _speed_series(track: Track, calibration: Optional[object]):
     """Returns list of (t, speed_yps) between consecutive points."""
     speeds = []
     pts = track.points
@@ -75,7 +80,7 @@ def _speed_series(track: Track, calibration: Optional[Calibration]):
     return speeds
 
 
-def _direction_series(track: Track, calibration: Optional[Calibration]):
+def _direction_series(track: Track, calibration: Optional[object]):
     """Per-step (dx, dy) displacement vectors in yards (or px if uncalibrated)."""
     vecs = []
     pts = track.points
@@ -105,7 +110,7 @@ def _perp(axis):
     return (-axis[1], axis[0])
 
 
-def find_break_point(track: Track, calibration: Optional[Calibration], min_depth_yd: float = 1.0):
+def find_break_point(track: Track, calibration: Optional[object], min_depth_yd: float = 1.0):
     """Finds the frame with the sharpest sustained direction change after the
     stem has some depth. Returns (index_into_points, angle_deg) or (None, None).
     """
@@ -140,7 +145,7 @@ def find_break_point(track: Track, calibration: Optional[Calibration], min_depth
     return best_i, best_delta
 
 
-def classify_route(track: Track, calibration: Optional[Calibration]) -> RouteMetrics:
+def classify_route(track: Track, calibration: Optional[object]) -> RouteMetrics:
     vecs = _direction_series(track, calibration)
     notes = []
     if len(vecs) < 8:
@@ -203,7 +208,7 @@ def classify_route(track: Track, calibration: Optional[Calibration]) -> RouteMet
     )
 
 
-def _separation_series(wr: Track, cb: Track, calibration: Optional[Calibration]):
+def _separation_series(wr: Track, cb: Track, calibration: Optional[object]):
     """Returns list of (t, distance) for frames both tracks have a point at
     (matched by nearest timestamp)."""
     cb_by_frame = {p.frame: p for p in cb.points}
@@ -218,7 +223,7 @@ def _separation_series(wr: Track, cb: Track, calibration: Optional[Calibration])
     return out
 
 
-def classify_coverage(cb: Track, wr: Track, calibration: Optional[Calibration]) -> CoverageMetrics:
+def classify_coverage(cb: Track, wr: Track, calibration: Optional[object]) -> CoverageMetrics:
     notes = []
     sep_series = _separation_series(wr, cb, calibration)
     initial_sep = sep_series[0][1] if sep_series else None
@@ -280,7 +285,7 @@ def classify_coverage(cb: Track, wr: Track, calibration: Optional[Calibration]) 
     )
 
 
-def separation_at(wr: Track, cb: Track, calibration: Optional[Calibration], frame: Optional[int]):
+def separation_at(wr: Track, cb: Track, calibration: Optional[object], frame: Optional[int]):
     if frame is None:
         return None
     cb_by_frame = {p.frame: p for p in cb.points}
