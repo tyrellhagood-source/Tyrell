@@ -1,0 +1,12 @@
+ultralytics>=8.2
+lap>=0.5.12  # linear assignment used by ultralytics' BoT-SORT/ByteTrack trackers
+opencv-python-headless>=4.9
+mediapipe>=0.10.20
+numpy>=1.26
+imageio-ffmpeg>=0.5
+
+# Optional: only needed for `discover --ocr-jerseys` (experimental jersey OCR).
+easyocr>=1.7
+
+# Optional: only needed for scripts/validate_against_bdb.py.
+pandas>=2.2
