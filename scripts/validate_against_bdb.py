@@ -145,10 +145,12 @@ def main():
         print(f"{g:<14}{group_total[g]:>6}{acc:>9.1%}")
 
     print("\nConfusion (rows = true, cols = predicted):")
-    groups = sorted(group_total)
-    print(" " * 14 + "".join(f"{g:>12}" for g in groups))
-    for g in groups:
-        print(f"{g:<14}" + "".join(f"{confusion[g][g2]:>12}" for g2 in groups))
+    true_groups = sorted(group_total)
+    predicted_groups = sorted({g2 for row in confusion.values() for g2 in row})
+    all_cols = sorted(set(true_groups) | set(predicted_groups))
+    print(" " * 14 + "".join(f"{g:>12}" for g in all_cols))
+    for g in true_groups:
+        print(f"{g:<14}" + "".join(f"{confusion[g][g2]:>12}" for g2 in all_cols))
 
 
 if __name__ == "__main__":
