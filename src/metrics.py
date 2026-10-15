@@ -113,6 +113,19 @@ def _perp(axis):
 def find_break_point(track: Track, calibration: Optional[object], min_depth_yd: float = 1.0):
     """Finds the frame with the sharpest sustained direction change after the
     stem has some depth. Returns (index_into_points, angle_deg) or (None, None).
+
+    A heading averaged over a window where the player is wobbling in place
+    (adjusting footwork/posture, e.g. settling under a catch) rather than
+    moving ballistically is almost pure noise, and can produce a huge
+    spurious "angle change" that has nothing to do with a real cut.
+    min_depth_yd alone doesn't catch this: without calibration it's compared
+    against raw pixel sums, which clear it almost immediately, so it's
+    effectively a no-op on an uncalibrated clip. The straightness gate below
+    is calibration-independent and catches exactly this case (confirmed
+    against a real broadcast clip where the depth-only version flagged a
+    ~180 degree "break" at the moment of the catch, not an actual route
+    break -- that window's net displacement was a small fraction of its
+    total step distance, the signature of wobble rather than travel).
     """
     vecs = _direction_series(track, calibration)
     if len(vecs) < 8:
@@ -125,19 +138,48 @@ def find_break_point(track: Track, calibration: Optional[object], min_depth_yd: 
         running += _project(v, axis)
         depths.append(running)
 
+    def straightness(vec_slice):
+        """1.0 = clean ballistic motion in one direction; near 0 = wobbling
+        (noisy detection jitter, or a player adjusting posture/footwork
+        without much net translation -- e.g. settling under a catch).
+        A heading average computed over a wobbly window isn't a real
+        direction, so it shouldn't be trusted as one side of a 'break'."""
+        sx = sum(v[0] for v in vec_slice)
+        sy = sum(v[1] for v in vec_slice)
+        net = math.hypot(sx, sy)
+        total = sum(math.hypot(*v) for v in vec_slice)
+        return net / total if total > 0 else 0.0
+
     # smooth headings to avoid frame-to-frame jitter from detection noise
     headings = [math.atan2(v[1], v[0]) for v in vecs]
     window = 5
+    # A real route break essentially never happens in the first ~15% of a
+    # tracked rep -- that's still the release/stem. This gate is frame-count
+    # based, not depth based, so (unlike min_depth_yd) it still does
+    # something on an uncalibrated clip, and it's what actually rules out
+    # the early-frame false positive confirmed on real broadcast footage
+    # below (frames 10/15/22 of a 90-frame vertical/go route, where
+    # straightness alone wasn't enough -- smooth camera pan produces
+    # locally "straight" pixel motion too, just rotating, so it can slip
+    # past a pure wobble check).
+    min_elapsed = max(window, int(len(headings) * 0.15))
     best_i, best_delta = None, 0.0
-    for i in range(window, len(headings) - window):
+    for i in range(min_elapsed, len(headings) - window):
         if depths[i] < min_depth_yd:
             continue
         before = headings[i - window:i]
         after = headings[i:i + window]
+        if min(straightness(vecs[i - window:i]), straightness(vecs[i:i + window])) < 0.5:
+            continue  # at least one side is too wobbly to trust as a real direction
         avg_before = math.atan2(sum(math.sin(a) for a in before), sum(math.cos(a) for a in before))
         avg_after = math.atan2(sum(math.sin(a) for a in after), sum(math.cos(a) for a in after))
         delta = abs(math.degrees(math.atan2(math.sin(avg_after - avg_before), math.cos(avg_after - avg_before))))
-        if delta > best_delta:
+        # A near-total reversal (>150 degrees) isn't a real route break -- no WR
+        # route plants and runs back the way it came that sharply. On
+        # broadcast footage this is the signature of camera pan corrupting
+        # the pixel-space trajectory (no motion compensation here), not a
+        # real cut, so treat it as unreliable rather than report it.
+        if delta > best_delta and delta <= 150:
             best_delta, best_i = delta, i
 
     if best_i is None or best_delta < 25:  # no real break detected -- treat as a vertical/go route
