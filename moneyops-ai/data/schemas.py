@@ -19,6 +19,7 @@ class OutcomePrice:
     point: float | None
     last_update: datetime
     description: str | None = None  # player name for props
+    provider: str = "the-odds-api"  # which data provider supplied this quote
 
 
 @dataclass

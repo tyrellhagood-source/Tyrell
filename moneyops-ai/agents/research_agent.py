@@ -14,6 +14,7 @@ from collections import defaultdict
 
 from agents.base import RESEARCH, AgentReport, Candidate, SportContext
 from data.injuries import injuries_for_teams, significant
+from utils.teams import normalize_team
 from data.schemas import Event, OutcomePrice
 from models.expected_value import overround, remove_vig
 from risk.risk_limits import is_stale, odds_age_minutes
@@ -86,8 +87,8 @@ class ResearchAgent:
                         continue
                     fair = remove_vig([o.price_decimal for o in book_set])
                     idx = next(i for i, o in enumerate(book_set) if o is b)
-                    cand.fair_by_book[b.bookmaker] = {"fair": fair[idx], "overround": overround(
-                        [o.price_decimal for o in book_set])}
+                    cand.fair_by_book[b.bookmaker] = {"fair": fair[idx], "provider": b.provider,
+                                                      "overround": overround([o.price_decimal for o in book_set])}
                 if cand.fair_by_book:
                     cand.fair_prob = statistics.median(v["fair"] for v in cand.fair_by_book.values())
                 cand.reports[RESEARCH] = self._report(cand, ctx, now)
@@ -116,7 +117,9 @@ class ResearchAgent:
                 flags.append(f"OUTLIER: best price implies {1 / c.best.price_decimal:.3f} vs consensus fair "
                              f"{c.fair_prob:.3f}; possibly stale or erroneous line")
         hist_teams = {}
-        if ctx.cfg.model is None:
+        if c.is_prop:
+            pass
+        elif ctx.cfg.model is None:
             missing.append(f"no statistical model / history source for {ctx.cfg.code}")
         elif not ctx.history:
             missing.append("historical results unavailable")
@@ -126,7 +129,13 @@ class ResearchAgent:
                 if hist_teams[t] == 0:
                     missing.append(f"no historical games found for {t} (name mismatch or new team)")
         if c.is_prop:
-            missing.append("player game logs not integrated; prop history unavailable")
+            player = normalize_team(c.description or "")
+            logs = [l for t in (c.event.home_team, c.event.away_team) for l in ctx.prop_logs.get(t, [])
+                    if normalize_team(l["player"]) == player]
+            if not ctx.prop_module:
+                missing.append(f"no player game-log source for {ctx.cfg.code} props")
+            elif not logs:
+                missing.append(f"no sportsipy game logs found for {c.description}")
         injuries = {}
         if ctx.injuries is not None:
             inj = injuries_for_teams(ctx.injuries, [c.event.home_team, c.event.away_team])
@@ -136,7 +145,7 @@ class ResearchAgent:
             missing.append(f"injury report unavailable ({ctx.injuries_error or 'not fetched'})")
         else:
             missing.append("no injury feed for this sport")
-        books_table = [{"book": b.bookmaker_title, "price": b.price_decimal, "point": b.point,
+        books_table = [{"book": b.bookmaker_title, "provider": b.provider, "price": b.price_decimal, "point": b.point,
                         "last_update": b.last_update.isoformat(),
                         "age_min": round(odds_age_minutes(b.last_update, now), 1),
                         "fair": c.fair_by_book.get(b.bookmaker, {}).get("fair")} for b in c.books]
@@ -149,7 +158,8 @@ class ResearchAgent:
         if c.fair_prob is not None:
             summary += f"; consensus no-vig {c.fair_prob:.3f}"
         return AgentReport(RESEARCH, verdict, round(score, 3), summary, reasons=[], flags=flags, data={
-            "sources": sorted({c.event.source} | {"espn" if ctx.history else ""} - {""}),
+            "sources": sorted({b.provider for b in c.books} | {g.source for g in ctx.history[:1]}
+                              | ({"sportsipy"} if c.is_prop and ctx.prop_logs else set())),
             "odds_retrieved_at": c.event.retrieved_at.isoformat(),
             "books": books_table, "n_books": len(c.books), "n_fresh_books": len(fresh),
             "n_complete_books": len(c.fair_by_book), "fair_prob": c.fair_prob, "fair_dispersion": disp,

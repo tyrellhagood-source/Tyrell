@@ -12,3 +12,5 @@ requests>=2.32
 python-dotenv>=1.0
 pytest>=8.0
 httpx>=0.27   # FastAPI TestClient
+# Optional: player game logs for props (SPORTSIPY_ENABLED=true). Unmaintained since 2022.
+sportsipy>=0.6.0

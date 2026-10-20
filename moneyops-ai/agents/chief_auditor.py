@@ -102,6 +102,9 @@ class ChiefAuditor:
                 disagreements.append("Statistician's history contradicts the Probability Engineer's positive EV")
             if r3.verdict == "SUPPORTS" and r4.verdict == "FAIL":
                 disagreements.append("History supports the side but the price offers no value")
+        ext = p4.get("external_prob_allsports")
+        if ext is not None and p4.get("final_prob") is not None and abs(ext - p4["final_prob"]) > s.max_model_market_gap:
+            disagreements.append(f"AllSportsAPI's probability ({ext:.1%}) disagrees with ours ({p4['final_prob']:.1%})")
         if r1 and r1.verdict == "COMPLETE" and r2 and r2.verdict != "VERIFIED":
             disagreements.append(f"Researcher reported complete data but Fact-Checker returned {r2.verdict}")
         if r1:
@@ -133,7 +136,7 @@ class ChiefAuditor:
             "probability_pass": bool(r4 and r4.verdict == "PASS"),
             "no_auditor_veto": not vetoes,
             "pre_game": not c.is_live,
-            "team_market": not c.is_prop,
+            "market_supported": (not c.is_prop) or bool(p4.get("model_prob") is not None),
         }
         if all(gates.values()):
             verdict = "QUALIFIED"

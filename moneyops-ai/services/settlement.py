@@ -10,7 +10,9 @@ import logging
 from datetime import timedelta
 
 from data.results import ResultsService
+from data.provider_base import ProviderError
 from data.sports_registry import SPORTS
+from data.sportsipy_provider import PROP_STATS
 from database.models import Recommendation
 from risk.bankroll import BankrollService
 from utils.timeutil import ensure_utc, utcnow
@@ -38,10 +40,36 @@ def grade_selection(market: str, side: str, point, home_score: int, away_score: 
 
 
 class SettlementService:
-    def __init__(self, settings, repo, espn=None, odds=None):
+    def __init__(self, settings, repo, espn=None, odds=None, allsports=None, sportsipy=None):
         self.s, self.repo = settings, repo
-        self.results = ResultsService(espn, odds, settings)
+        self.results = ResultsService(espn, odds, settings, allsports)
+        self.sportsipy = sportsipy
         self._cache = {}
+
+    def _grade_prop(self, rec: Recommendation) -> tuple[str | None, str]:
+        cfg = SPORTS.get(rec.sport_code)
+        module = cfg.sportsipy if cfg else None
+        attrs = PROP_STATS.get(module or "", {}).get(rec.market)
+        player = (rec.report_json or {}).get("player")
+        if not (module and attrs and player and rec.side in ("over", "under") and rec.point is not None):
+            return None, "prop cannot be auto-graded (no box-score mapping); settle manually"
+        if self.sportsipy is None or not self.sportsipy.is_configured():
+            return None, "sportsipy disabled; settle props manually"
+        statuses = []
+        for team in (rec.home_team, rec.away_team):
+            try:
+                st, value, src = self.sportsipy.player_stat_in_game(module, team, ensure_utc(rec.commence_time),
+                                                                    player, attrs)
+            except ProviderError as exc:
+                return None, f"sportsipy: {exc}"
+            if st == "FINAL":
+                if value == rec.point:
+                    return "push", f"{player} {value:g} via {src}"
+                return ("win" if (value > rec.point) == (rec.side == "over") else "loss"), f"{player} {value:g} via {src}"
+            statuses.append((st, src))
+        if all(st == "DNP" for st, _ in statuses):
+            return "void", f"{player} did not play ({'; '.join(s for _, s in statuses)})"
+        return None, "; ".join(s for _, s in statuses)
 
     def _result(self, sport_code, sport_key, event_id, home, away, commence):
         key = event_id
@@ -57,7 +85,7 @@ class SettlementService:
 
     def _grade_single(self, rec: Recommendation) -> tuple[str | None, str]:
         if rec.market.startswith("player_"):
-            return None, "player props require manual settlement (no player stats feed)"
+            return self._grade_prop(rec)
         cfg = SPORTS.get(rec.sport_code)
         vr = self._result(rec.sport_code, rec.sport_key, rec.event_id, rec.home_team, rec.away_team, rec.commence_time)
         if vr.status == "POSTPONED":

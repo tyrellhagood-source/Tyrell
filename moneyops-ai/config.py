@@ -62,6 +62,19 @@ class Settings:
     espn_enabled: bool = True
     espn_base_url: str = "https://site.api.espn.com/apis/site/v2/sports"
     use_odds_api_scores: bool = False
+    # AllSportsAPI (https://allsportsapi.com) - second schedule/result/odds source
+    allsports_api_key: str = ""
+    allsports_base_url: str = "https://apiv2.allsportsapi.com"
+    allsports_timezone: str = "UTC"
+    allsports_use_odds: bool = True
+    allsports_use_probabilities: bool = True
+    allsports_max_requests_per_run: int = 80
+    allsports_path_overrides: tuple[str, ...] = ()       # e.g. ("NHL:hockey", "MLB:baseball")
+    # sportsipy (sports-reference.com scraper) - player game logs for props
+    sportsipy_enabled: bool = False
+    sportsipy_max_requests_per_minute: int = 15
+    sportsipy_games_per_team: int = 15
+    sportsipy_max_requests_per_run: int = 150
     http_timeout_seconds: float = 15.0
     http_max_retries: int = 3
     odds_cache_ttl_seconds: int = 300
@@ -122,6 +135,18 @@ class Settings:
             espn_enabled=_bool("ESPN_ENABLED", d.espn_enabled),
             espn_base_url=_env("ESPN_BASE_URL", d.espn_base_url),
             use_odds_api_scores=_bool("USE_ODDS_API_SCORES", d.use_odds_api_scores),
+            allsports_api_key=_env("ALLSPORTS_API_KEY", ""),
+            allsports_base_url=_env("ALLSPORTS_BASE_URL", d.allsports_base_url),
+            allsports_timezone=_env("ALLSPORTS_TIMEZONE", d.allsports_timezone),
+            allsports_use_odds=_bool("ALLSPORTS_USE_ODDS", d.allsports_use_odds),
+            allsports_use_probabilities=_bool("ALLSPORTS_USE_PROBABILITIES", d.allsports_use_probabilities),
+            allsports_max_requests_per_run=_int("ALLSPORTS_MAX_REQUESTS_PER_RUN", d.allsports_max_requests_per_run),
+            allsports_path_overrides=_tuple("ALLSPORTS_PATH_OVERRIDES", ""),
+            sportsipy_enabled=_bool("SPORTSIPY_ENABLED", d.sportsipy_enabled),
+            sportsipy_max_requests_per_minute=min(19, _int("SPORTSIPY_MAX_REQUESTS_PER_MINUTE",
+                                                           d.sportsipy_max_requests_per_minute)),
+            sportsipy_games_per_team=_int("SPORTSIPY_GAMES_PER_TEAM", d.sportsipy_games_per_team),
+            sportsipy_max_requests_per_run=_int("SPORTSIPY_MAX_REQUESTS_PER_RUN", d.sportsipy_max_requests_per_run),
             http_timeout_seconds=_float("HTTP_TIMEOUT_SECONDS", d.http_timeout_seconds),
             http_max_retries=_int("HTTP_MAX_RETRIES", d.http_max_retries),
             odds_cache_ttl_seconds=_int("ODDS_CACHE_TTL_SECONDS", d.odds_cache_ttl_seconds),
@@ -163,7 +188,7 @@ class Settings:
         """Settings safe to display/store: secrets are masked."""
         out = {}
         for key, value in self.__dict__.items():
-            if key == "odds_api_key":
+            if key in ("odds_api_key", "allsports_api_key"):
                 value = "configured" if value else "missing"
             elif isinstance(value, Path):
                 value = str(value)

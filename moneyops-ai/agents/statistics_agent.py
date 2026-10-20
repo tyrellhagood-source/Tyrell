@@ -22,6 +22,8 @@ import numpy as np
 
 from agents.base import STATS, AgentReport, Candidate, SportContext
 from data.schemas import HistoricalGame
+from agents.prop_support import prop_rows
+from models.props import MIN_GAMES, prop_history_report
 from models.stats import hit_rate, streaks
 from utils.timeutil import ensure_utc
 
@@ -70,8 +72,7 @@ class StatisticsAgent:
 
     def analyze(self, c: Candidate, ctx: SportContext) -> AgentReport:
         if c.is_prop:
-            return AgentReport(STATS, "INSUFFICIENT_DATA", 0.0, "Player game logs are not integrated yet",
-                               reasons=["no player-level history source connected"], data={"caveats": CAVEATS})
+            return self._analyze_prop(c, ctx)
         if ctx.cfg.model is None or not ctx.history:
             return AgentReport(STATS, "INSUFFICIENT_DATA", 0.0, f"No historical results for {ctx.cfg.code}",
                                reasons=["historical data source unavailable for this sport"],
@@ -172,3 +173,44 @@ class StatisticsAgent:
             "primary_window": primary_label, "primary": primary, "windows": windows, "splits": splits,
             "rest": rest, "streaks": streak, "team_record_season": record, "break_even": be,
             "caveats": CAVEATS, "leakage_guard": f"only games before {before.isoformat()} used"})
+
+    def _analyze_prop(self, c: Candidate, ctx: SportContext) -> AgentReport:
+        rows, attrs, team, opp = prop_rows(c, ctx)
+        caveats = CAVEATS + ["Player history ignores opponent defence, pace, and teammates' injuries.",
+                             "Games the player missed are excluded (a prop on an inactive player is void)."]
+        if rows is None:
+            return AgentReport(STATS, "INSUFFICIENT_DATA", 0.0, attrs, reasons=[attrs], data={"caveats": caveats})
+        if c.side not in ("over", "under") or c.point is None:
+            return AgentReport(STATS, "INSUFFICIENT_DATA", 0.0, "only over/under props are supported",
+                               reasons=["unsupported prop shape"], data={"caveats": caveats})
+        rep = prop_history_report(rows, c.side, c.point, team == c.event.home_team, opp)
+        primary = rep["windows"]["all_logged"]
+        be = 1 / c.best.price_decimal if c.best else None
+        min_n = max(MIN_GAMES, min(self.s.min_sample, 12))
+        reasons, flags = [], []
+        if primary["n"] < min_n:
+            verdict, score = "INSUFFICIENT_DATA", 0.0
+            reasons.append(f"only {primary['n']} decided games in the player's log (minimum {min_n})")
+        elif be is None:
+            verdict, score = "INSUFFICIENT_DATA", 0.0
+            reasons.append("no fresh price to compare against")
+        elif primary["ci_low"] > be:
+            verdict, score = "SUPPORTS", 0.8
+            reasons.append(f"{c.description} {c.side} {c.point:g}: {primary['rate']:.1%} over last {primary['n']} "
+                           f"(95% CI {primary['ci_low']:.1%}-{primary['ci_high']:.1%}) above break-even {be:.1%}")
+        elif primary["ci_high"] < be:
+            verdict, score = "CONTRADICTS", 0.2
+            reasons.append(f"{c.description} {c.side} {c.point:g}: {primary['rate']:.1%} (CI upper "
+                           f"{primary['ci_high']:.1%}) below break-even {be:.1%}")
+        else:
+            verdict, score = "NEUTRAL", 0.5
+            reasons.append(f"{c.description} {c.side} {c.point:g}: {primary['rate']:.1%} over last {primary['n']} "
+                           f"(95% CI {primary['ci_low']:.1%}-{primary['ci_high']:.1%}) consistent with break-even "
+                           f"{be:.1%}")
+        wl = rep["workload"]
+        if wl["avg_minutes_last5"] and wl["avg_minutes_all"] and wl["avg_minutes_last5"] < 0.8 * wl["avg_minutes_all"]:
+            flags.append(f"minutes trending down ({wl['avg_minutes_last5']:.1f} last 5 vs {wl['avg_minutes_all']:.1f})")
+        return AgentReport(STATS, verdict, score, reasons[0], reasons=reasons, flags=flags, data={
+            "primary_window": "all_logged", "primary": primary, "player": c.description, "team": team,
+            "stat": "+".join(attrs), "break_even": be, "caveats": caveats,
+            "leakage_guard": f"only games before {c.event.commence_time:%Y-%m-%d}", **rep})

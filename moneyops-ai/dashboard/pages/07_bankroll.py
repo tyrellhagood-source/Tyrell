@@ -64,8 +64,8 @@ else:
     st.caption("None.")
 cc = st.columns(2)
 if cc[0].button("Settle from verified final results"):
-    odds, espn = build_providers(s, r)
-    st_svc = SettlementService(s, r, espn, odds)
+    prov = build_providers(s, r)
+    st_svc = SettlementService(s, r, prov.espn, prov.odds, prov.allsports, prov.sportsipy)
     st.write(st_svc.settle_open_wagers(), st_svc.grade_recommendations())
 with cc[1].popover("Manual settlement"):
     st.caption("Only for markets the system cannot verify (e.g. props). Recorded as MANUAL.")

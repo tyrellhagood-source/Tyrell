@@ -18,7 +18,9 @@ from __future__ import annotations
 import numpy as np
 
 from agents.base import PROB, AgentReport, Candidate, SportContext
+from agents.prop_support import prop_rows
 from models.expected_value import expected_value, implied_probability
+from models.props import MIN_GAMES, bootstrap_probabilities, distribution_probability
 from risk.position_sizing import suggested_stake
 
 
@@ -28,7 +30,21 @@ class ProbabilityAgent:
     def __init__(self, settings):
         self.s = settings
 
+    def _prop_probs(self, c: Candidate, ctx: SportContext):
+        rows, attrs, _, _ = prop_rows(c, ctx)
+        if rows is None:
+            return None, None, attrs
+        if c.side not in ("over", "under") or c.point is None:
+            return None, None, "unsupported prop shape"
+        vals = [r["value"] for r in rows]
+        r = distribution_probability(vals, c.side, c.point)
+        if r is None:
+            return None, None, f"need >= {MIN_GAMES} appearances and a half/whole-number line"
+        return r, bootstrap_probabilities(vals, c.side, c.point, seed=self.s.random_seed), None
+
     def _model_probs(self, c: Candidate, ctx: SportContext):
+        if c.is_prop:
+            return self._prop_probs(c, ctx)
         model = ctx.model
         if model is None or c.is_prop or c.side not in ("home", "away", "draw", "over", "under"):
             return None, None, "no statistical model for this market"
@@ -88,14 +104,21 @@ class ProbabilityAgent:
                                 s.typical_sportsbook_min_bet)
         c.stake = stake["stake"]
         gap = p_model - market * decided
-        data |= {"method": f"{ctx.cfg.model} team-rating model blended with no-vig consensus",
+        method = ("player performance distribution (weighted normal, sportsipy logs)" if c.is_prop
+                  else f"{ctx.cfg.model} team-rating model")
+        data |= {"method": f"{method} blended with no-vig consensus",
                  "model_prob": p_model, "model_prob_interval": [float(lo_m), float(hi_m)],
                  "bootstrap_n": len(boots or []), "push_prob": p_push, "final_prob": p_final,
                  "final_prob_interval": [float(p_low), float(p_high)], "model_minus_market": gap,
                  "expected_value": ev, "expected_value_low": ev_low, "expected_roi_pct": ev * 100,
                  "break_even_prob": implied, "stake": stake, "potential_profit": round(stake["stake"] * (d - 1), 2),
                  "max_loss": stake["stake"]}
-        if ctx.model is not None:
+        ext = ctx.external_probs.get(c.event.event_id, {}).get(c.side) if c.market == "h2h" else None
+        if ext is not None:
+            data["external_prob_allsports"] = ext
+            if abs(ext - p_final) > s.max_model_market_gap:
+                flags.append(f"AllSportsAPI probability {ext:.1%} differs from our estimate {p_final:.1%}")
+        if ctx.model is not None and not c.is_prop:
             mu = ctx.model.expected_scores(ctx.history_name(c.event.home_team), ctx.history_name(c.event.away_team),
                                            c.neutral_site)
             data["expected_score"] = {"home": round(mu[0], 2), "away": round(mu[1], 2)}

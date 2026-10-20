@@ -13,15 +13,15 @@ s = settings()
 
 c1, c2 = st.columns([1, 3])
 with c1:
-    if st.button("▶ Run analysis now", type="primary", disabled=not s.odds_api_key):
+    if st.button("▶ Run analysis now", type="primary", disabled=not (s.odds_api_key or s.allsports_api_key)):
         with st.spinner("Five agents at work: fetching odds, history, schedules, injuries..."):
             res = AnalysisService(s, repo()).run()
         st.toast(res.message)
         st.rerun()
 with c2:
-    if not s.odds_api_key:
-        st.error("ODDS_API_KEY is not set. Live odds are unavailable, so no games can be analysed. "
-                 "Add the key to `.env` (see README).")
+    if not (s.odds_api_key or s.allsports_api_key):
+        st.error("No odds provider key is set (ODDS_API_KEY or ALLSPORTS_API_KEY). Live odds are unavailable, "
+                 "so no games can be analysed. Add a key to `.env` (see README).")
     else:
         st.caption(f"Each run spends up to {s.max_credits_per_run} Odds API credits "
                    f"({len(s.odds_markets)} markets x {len(s.odds_regions)} region(s) per in-season sport).")

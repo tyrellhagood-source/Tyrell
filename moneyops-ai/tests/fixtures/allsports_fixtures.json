@@ -1,0 +1,9 @@
+{"success": 1, "result": [
+  {"event_key": 1001, "event_date": "2026-10-21", "event_time": "19:30", "event_home_team": "Boston Celtics",
+   "event_away_team": "New York Knicks", "event_status": "", "event_final_result": "-", "league_name": "NBA",
+   "league_key": 766, "event_live": "0"},
+  {"event_key": 1000, "event_date": "2026-10-19", "event_time": "19:00", "event_home_team": "Miami Heat",
+   "event_away_team": "Orlando Magic", "event_status": "Finished", "event_final_result": "110 - 104",
+   "league_name": "NBA", "league_key": 766},
+  {"event_key": 1002, "event_home_team": "Missing Date FC"}
+]}

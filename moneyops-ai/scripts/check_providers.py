@@ -15,7 +15,8 @@ from utils.timeutil import utcnow  # noqa: E402
 
 if __name__ == "__main__":
     s, repo = get_settings(), get_repo()
-    odds, espn = build_providers(s, repo)
+    prov = build_providers(s, repo)
+    odds, espn = prov.odds, prov.espn
     ok = True
     try:
         sports = odds.list_sports()
@@ -32,6 +33,24 @@ if __name__ == "__main__":
     except ProviderError as exc:
         ok = False
         print(f"[FAIL] ESPN: {exc}")
-    for p in (odds, espn):
+    if prov.allsports.is_configured():
+        try:
+            key = prov.allsports.resolve_league("football", "Premier League", "England")
+            print(f"[OK] AllSportsAPI: met=Leagues answered; Premier League key = {key}")
+        except ProviderError as exc:
+            ok = False
+            print(f"[FAIL] AllSportsAPI: {exc}")
+    else:
+        print("[--] AllSportsAPI: ALLSPORTS_API_KEY not set (optional)")
+    if prov.sportsipy.is_configured():
+        try:
+            games = prov.sportsipy.team_games("nba", "Boston Celtics", utcnow())
+            print(f"[OK] sportsipy: Boston Celtics schedule parsed ({len(games)} completed games this season)")
+        except ProviderError as exc:
+            ok = False
+            print(f"[FAIL] sportsipy: {exc}")
+    else:
+        print("[--] sportsipy: disabled (set SPORTSIPY_ENABLED=true; optional)")
+    for p in prov.all():
         repo.save_provider_status(p.status)
     sys.exit(0 if ok else 1)

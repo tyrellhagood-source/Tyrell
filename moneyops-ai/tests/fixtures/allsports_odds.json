@@ -1,0 +1,8 @@
+{"success": 1, "result": {
+  "1001": [
+    {"odd_bookmakers": "bet365", "odd_epoch": 1792605600, "odd_1": "1.50", "odd_2": "2.70", "o+221.5": "1.91", "u+221.5": "1.91", "ah-6.5_1": "1.9"},
+    {"odd_bookmakers": "Unibet", "odd_epoch": 1792605600, "odd_1": "1.51", "odd_x": "12.0", "odd_2": "2.60"},
+    {"odd_bookmakers": "NoTime", "odd_1": "1.40", "odd_2": "3.10"}
+  ],
+  "9999": [{"odd_bookmakers": "bet365", "odd_epoch": 1792605600, "odd_1": "2.0", "odd_2": "1.8"}]
+}}

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from data.provider_base import ProviderError
 from data.schemas import FinalScore
-from data.sports_registry import SPORTS
+from data.sports_registry import SPORTS, allsports_path
 from utils.teams import match_team
 from utils.timeutil import minutes_between
 
@@ -24,8 +24,8 @@ class VerifiedResult:
 
 
 class ResultsService:
-    def __init__(self, espn=None, odds=None, settings=None):
-        self.espn, self.odds, self.settings = espn, odds, settings
+    def __init__(self, espn=None, odds=None, settings=None, allsports=None):
+        self.espn, self.odds, self.settings, self.allsports = espn, odds, settings, allsports
         self._scores_cache: dict[str, dict[str, FinalScore]] = {}
 
     def _espn_final(self, sport_code, home, away, commence: datetime):
@@ -42,8 +42,38 @@ class ResultsService:
                     return "POSTPONED", g.status_detail
                 if not g.completed or g.home_score is None:
                     return "NOT_FINAL", g.status_detail
+                detail = g.status_detail.lower()
+                if cfg.has_draw and any(w in detail for w in ("aet", "pen", "extra")):
+                    return None, "ESPN score includes extra time/penalties; 90-minute result needed"
                 return FinalScore(home, away, g.home_score, g.away_score, True, "espn", g.retrieved_at), ""
         return None, "game not found on ESPN"
+
+    def _allsports_final(self, sport_code, home, away, commence: datetime):
+        cfg = SPORTS.get(sport_code)
+        if cfg is None or self.allsports is None or not self.allsports.is_configured():
+            return None, ""
+        path = allsports_path(cfg, self.settings.allsports_path_overrides if self.settings else ())
+        if not path:
+            return None, ""
+        league = None
+        if cfg.allsports_league:
+            league = self.allsports.resolve_league(path, *cfg.allsports_league)
+            if league is None:
+                return None, "AllSportsAPI league not resolved"
+        games, extras = self.allsports.fixtures(cfg.code, path, commence - timedelta(days=1),
+                                                commence + timedelta(days=1), league, cfg.has_draw, ttl=300)
+        for g in games:
+            h, _ = match_team(home, [g.home_team])
+            a, _ = match_team(away, [g.away_team])
+            if h and a and abs(minutes_between(g.start_time, commence)) < 36 * 60:
+                if extras.get(g.game_id, {}).get("cancelled"):
+                    return "POSTPONED", g.status_detail
+                if g.state != "post":
+                    return "NOT_FINAL", g.status_detail
+                if not g.completed:
+                    return None, extras.get(g.game_id, {}).get("settle_note") or "no usable final score"
+                return FinalScore(home, away, g.home_score, g.away_score, True, "allsportsapi", g.retrieved_at), ""
+        return None, "game not found on AllSportsAPI"
 
     def _odds_final(self, sport_key, event_id):
         if self.odds is None or not (self.settings and self.settings.use_odds_api_scores):
@@ -53,20 +83,29 @@ class ResultsService:
         return self._scores_cache[sport_key].get(event_id)
 
     def lookup(self, sport_code, sport_key, event_id, home, away, commence: datetime) -> VerifiedResult:
+        """Combine sources. Any source saying the game is not final -> wait.
+        Postponed only if no source has a final score. Conflicting finals ->
+        CONFLICT (never settled automatically)."""
         finals: list[FinalScore] = []
-        notes = []
-        try:
-            r, note = self._espn_final(sport_code, home, away, commence)
+        notes, postponed, not_final = [], [], []
+        for name, fn in (("espn", self._espn_final), ("allsportsapi", self._allsports_final)):
+            try:
+                r, note = fn(sport_code, home, away, commence)
+            except ProviderError as exc:
+                notes.append(f"{name}: {exc}")
+                continue
             if r == "POSTPONED":
-                return VerifiedResult("POSTPONED", detail=note, sources=("espn",))
-            if r == "NOT_FINAL":
-                return VerifiedResult("NOT_FINAL", detail=note, sources=("espn",))
-            if isinstance(r, FinalScore):
+                postponed.append(name)
+            elif r == "NOT_FINAL":
+                not_final.append(f"{name}: {note}")
+            elif isinstance(r, FinalScore):
                 finals.append(r)
             elif note:
-                notes.append(note)
-        except ProviderError as exc:
-            notes.append(f"espn: {exc}")
+                notes.append(f"{name}: {note}")
+        if not_final:
+            return VerifiedResult("NOT_FINAL", detail="; ".join(not_final))
+        if postponed and not finals:
+            return VerifiedResult("POSTPONED", detail="postponed/cancelled", sources=tuple(postponed))
         try:
             r2 = self._odds_final(sport_key, event_id)
             if r2:
