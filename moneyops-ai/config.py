@@ -70,6 +70,12 @@ class Settings:
     allsports_use_probabilities: bool = True
     allsports_max_requests_per_run: int = 80
     allsports_path_overrides: tuple[str, ...] = ()       # e.g. ("NHL:hockey", "MLB:baseball")
+    # balldontlie (https://www.balldontlie.io) - free plan: games only, 5 requests/min
+    balldontlie_api_key: str = ""
+    balldontlie_base_url: str = "https://api.balldontlie.io"
+    balldontlie_requests_per_minute: int = 5
+    balldontlie_max_requests_per_run: int = 20
+    balldontlie_paths: tuple[str, ...] = ()       # overrides, e.g. ("NHL:nhl/v1",)
     # Player game logs for props: nba_api (stats.nba.com) and nflreadpy (nflverse)
     nba_api_enabled: bool = True
     nflreadpy_enabled: bool = True
@@ -141,6 +147,11 @@ class Settings:
             allsports_use_probabilities=_bool("ALLSPORTS_USE_PROBABILITIES", d.allsports_use_probabilities),
             allsports_max_requests_per_run=_int("ALLSPORTS_MAX_REQUESTS_PER_RUN", d.allsports_max_requests_per_run),
             allsports_path_overrides=_tuple("ALLSPORTS_PATH_OVERRIDES", ""),
+            balldontlie_api_key=_env("BALLDONTLIE_API_KEY", ""),
+            balldontlie_base_url=_env("BALLDONTLIE_BASE_URL", d.balldontlie_base_url),
+            balldontlie_requests_per_minute=_int("BALLDONTLIE_REQUESTS_PER_MINUTE", d.balldontlie_requests_per_minute),
+            balldontlie_max_requests_per_run=_int("BALLDONTLIE_MAX_REQUESTS_PER_RUN", d.balldontlie_max_requests_per_run),
+            balldontlie_paths=_tuple("BALLDONTLIE_PATHS", ""),
             nba_api_enabled=_bool("NBA_API_ENABLED", d.nba_api_enabled),
             nflreadpy_enabled=_bool("NFLREADPY_ENABLED", d.nflreadpy_enabled),
             player_stats_games_per_player=_int("PLAYER_STATS_GAMES_PER_PLAYER", d.player_stats_games_per_player),
@@ -185,7 +196,7 @@ class Settings:
         """Settings safe to display/store: secrets are masked."""
         out = {}
         for key, value in self.__dict__.items():
-            if key in ("odds_api_key", "allsports_api_key"):
+            if key in ("odds_api_key", "allsports_api_key", "balldontlie_api_key"):
                 value = "configured" if value else "missing"
             elif isinstance(value, Path):
                 value = str(value)

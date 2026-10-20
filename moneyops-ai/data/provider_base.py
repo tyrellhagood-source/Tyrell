@@ -78,7 +78,8 @@ class ProviderBase:
         self.status.last_error_at = utcnow()
         log.warning("%s error: %s", self.name, redact(message))
 
-    def get_json(self, url: str, params: dict | None = None, ttl_seconds: int = 0) -> tuple[object, FetchMeta]:
+    def get_json(self, url: str, params: dict | None = None, ttl_seconds: int = 0,
+                 headers: dict | None = None) -> tuple[object, FetchMeta]:
         params = dict(params or {})
         public_params = {k: v for k, v in params.items() if k not in self.secret_params}
         cache_key = None
@@ -94,7 +95,9 @@ class ProviderBase:
         last_exc: Exception | None = None
         for attempt in range(attempts):
             try:
-                resp = self.session.get(url, params=params, timeout=self.settings.http_timeout_seconds)
+                self._before_request()
+                kwargs = {"headers": headers} if headers else {}
+                resp = self.session.get(url, params=params, timeout=self.settings.http_timeout_seconds, **kwargs)
             except requests.RequestException as exc:  # network / TLS / proxy failure
                 last_exc = ProviderError(f"{self.name}: network error for {url}: {exc}")
                 time.sleep(min(8, 0.5 * 2 ** attempt))
@@ -134,6 +137,9 @@ class ProviderBase:
         err = last_exc or ProviderError(f"{self.name}: request failed for {url}")
         self._record_error(str(err))
         raise err
+
+    def _before_request(self) -> None:
+        """Hook run before every real (non-cached) HTTP attempt: throttling/budgets."""
 
     def _observe_headers(self, headers: dict) -> None:
         pass

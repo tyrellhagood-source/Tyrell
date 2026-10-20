@@ -1,8 +1,8 @@
 """Agent 2 - Independent Fact-Checker.
 
 Re-derives the critical facts from sources other than the odds feed:
-* the game exists on at least one independent schedule (ESPN and/or
-  AllSportsAPI) with the same teams; when two sources are available they
+* the game exists on at least one independent schedule (ESPN, AllSportsAPI
+  and/or balldontlie) with the same teams; when two sources are available they
   must not contradict each other (status, start time, orientation),
 * the start time agrees, and the game has not already finished/postponed,
 * the price is fresh and quoted by enough independent books,
@@ -25,7 +25,7 @@ from datetime import timedelta
 from agents.base import VERIFY, AgentReport, Candidate, SportContext
 from data.provider_base import ProviderError
 from data.schedules import fetch_schedule, find_scheduled_game
-from data.sports_registry import allsports_path
+from data.sports_registry import allsports_path, balldontlie_path
 from risk.risk_limits import is_stale
 from utils.teams import normalize_team
 from utils.timeutil import ensure_utc, minutes_between
@@ -33,13 +33,22 @@ from utils.timeutil import ensure_utc, minutes_between
 BAD_STATUS = ("postpon", "cancel", "suspend", "abandon")
 
 
+def game_date_matches(game, event) -> bool:
+    """Date-only sources: the listed US-Eastern date must equal the odds
+    feed's kick-off date in US Eastern time."""
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+    return game.start_time.astimezone(et).date() == event.commence_time.astimezone(et).date()
+
+
 class VerificationAgent:
     name = VERIFY
 
-    def __init__(self, settings, espn, allsports=None):
+    def __init__(self, settings, espn, allsports=None, balldontlie=None):
         self.s = settings
         self.espn = espn
         self.allsports = allsports
+        self.balldontlie = balldontlie
 
     def prepare(self, ctx: SportContext, events) -> None:
         """Fetch independent schedules for this sport (own requests; the
@@ -62,6 +71,13 @@ class VerificationAgent:
                 ctx.schedules["allsportsapi"] = games
             except ProviderError as exc:
                 ctx.schedule_errors["allsportsapi"] = str(exc)
+        bdl = balldontlie_path(ctx.cfg, self.s.balldontlie_paths)
+        if bdl and self.balldontlie is not None and self.balldontlie.is_configured():
+            try:
+                ctx.schedules["balldontlie"] = self.balldontlie.games(ctx.cfg.code, bdl, start - timedelta(days=1),
+                                                                      end + timedelta(days=1))
+            except ProviderError as exc:
+                ctx.schedule_errors["balldontlie"] = str(exc)
         if not ctx.schedules and not ctx.schedule_errors:
             ctx.schedule_errors["none"] = f"no independent schedule source for {ctx.cfg.code}"
 
@@ -97,17 +113,22 @@ class VerificationAgent:
                       "home/away teams reversed between sources" if detail["home_away_swapped"] else "consistent",
                       contradiction=True)
                 diff = detail["start_diff_minutes"]
-                check(f"start_time[{src}]", diff <= s.max_start_time_diff_minutes, True,
-                      f"odds feed and {src} differ by {diff:.0f} min", contradiction=True)
+                if game.time_known:
+                    check(f"start_time[{src}]", diff <= s.max_start_time_diff_minutes, True,
+                          f"odds feed and {src} differ by {diff:.0f} min", contradiction=True)
+                else:
+                    check(f"start_date[{src}]", game_date_matches(game, c.event), True,
+                          f"{src} lists the game on {game.start_time:%Y-%m-%d} (no tip-off time given)",
+                          contradiction=True)
                 status = game.status_detail.lower()
                 bad = game.completed or game.state == "post" or any(w in status for w in BAD_STATUS)
                 check(f"game_status[{src}]", not bad, True, f"{src} status: {game.status_detail or game.state}",
                       contradiction=True)
                 if game.state == "in":
                     flags.append(f"game in progress per {src}")
-            if len(matched) >= 2:
-                (g1, _), (g2, _) = list(matched.values())[:2]
-                gap = abs(minutes_between(g1.start_time, g2.start_time))
+            timed = [g for g, _ in matched.values() if g.time_known]
+            if len(timed) >= 2:
+                gap = abs(minutes_between(timed[0].start_time, timed[1].start_time))
                 check("schedule_sources_agree", gap <= s.max_start_time_diff_minutes, True,
                       f"independent sources differ by {gap:.0f} min", contradiction=True)
         # 4: freshness

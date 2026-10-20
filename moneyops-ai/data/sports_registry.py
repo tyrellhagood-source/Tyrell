@@ -26,25 +26,26 @@ class SportConfig:
     injuries: bool = False
     allsports_path: str | None = None            # AllSportsAPI sport path (football, basketball, tennis, cricket)
     allsports_league: tuple[str, str | None] | None = None   # (league_name, country) resolved via met=Leagues
+    balldontlie: str | None = None               # balldontlie API path, e.g. "v1" (NBA), "nfl/v1"
     player_logs: str | None = None               # player game-log source key: "nba" (nba_api), "nfl" (nflreadpy)
 
 
 SPORTS: dict[str, SportConfig] = {s.code: s for s in [
-    SportConfig("NFL", "American Football", "NFL", "americanfootball_nfl", "football/nfl", "gaussian", injuries=True, player_logs="nfl"),
+    SportConfig("NFL", "American Football", "NFL", "americanfootball_nfl", "football/nfl", "gaussian", injuries=True, player_logs="nfl", balldontlie="nfl/v1"),
     SportConfig("NCAAF", "American Football", "NCAA Football (FBS)", "americanfootball_ncaaf",
                 "football/college-football", "gaussian", espn_groups="80"),
-    SportConfig("NBA", "Basketball", "NBA", "basketball_nba", "basketball/nba", "gaussian", injuries=True, allsports_path="basketball", allsports_league=("NBA", "USA"), player_logs="nba"),
+    SportConfig("NBA", "Basketball", "NBA", "basketball_nba", "basketball/nba", "gaussian", injuries=True, allsports_path="basketball", allsports_league=("NBA", "USA"), player_logs="nba", balldontlie="v1"),
     SportConfig("NCAAB", "Basketball", "NCAA Men's Basketball", "basketball_ncaab",
-                "basketball/mens-college-basketball", "gaussian", espn_groups="50"),
+                "basketball/mens-college-basketball", "gaussian", espn_groups="50", balldontlie="ncaab/v1"),
     SportConfig("NCAAW", "Basketball", "NCAA Women's Basketball", "basketball_wncaab",
                 "basketball/womens-college-basketball", "gaussian", espn_groups="50"),
     SportConfig("WNBA", "Basketball", "WNBA", "basketball_wnba", "basketball/wnba", "gaussian", injuries=True, allsports_path="basketball", allsports_league=("WNBA", "USA")),
     SportConfig("MLB", "Baseball", "MLB", "baseball_mlb", "baseball/mlb", "poisson",
-                tie_adds_one=True, max_score=25, injuries=True, allsports_league=("MLB", "USA")),
+                tie_adds_one=True, max_score=25, injuries=True, allsports_league=("MLB", "USA"), balldontlie="mlb/v1"),
     SportConfig("NHL", "Ice Hockey", "NHL", "icehockey_nhl", "hockey/nhl", "poisson",
                 tie_adds_one=True, max_score=12, injuries=True, allsports_league=("NHL", "USA")),
     SportConfig("EPL", "Soccer", "English Premier League", "soccer_epl", "soccer/eng.1", "poisson",
-                has_draw=True, ties_resolved=False, max_score=10, allsports_path="football", allsports_league=("Premier League", "England")),
+                has_draw=True, ties_resolved=False, max_score=10, allsports_path="football", allsports_league=("Premier League", "England"), balldontlie="epl/v1"),
     SportConfig("MLS", "Soccer", "MLS", "soccer_usa_mls", "soccer/usa.1", "poisson",
                 has_draw=True, ties_resolved=False, max_score=10, allsports_path="football", allsports_league=("MLS", "USA")),
     SportConfig("UCL", "Soccer", "UEFA Champions League", "soccer_uefa_champs_league", "soccer/uefa.champions",
@@ -84,3 +85,12 @@ def allsports_path(cfg: SportConfig, overrides: tuple[str, ...] = ()) -> str | N
         if code.strip().upper() == cfg.code and path.strip():
             return path.strip()
     return cfg.allsports_path
+
+
+def balldontlie_path(cfg: SportConfig, overrides: tuple[str, ...] = ()) -> str | None:
+    """API path for a sport, allowing BALLDONTLIE_PATHS like ("NHL:nhl/v1",)."""
+    for item in overrides:
+        code, _, path = item.partition(":")
+        if code.strip().upper() == cfg.code and path.strip():
+            return path.strip()
+    return cfg.balldontlie

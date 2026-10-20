@@ -23,7 +23,7 @@ from utils.timeutil import to_local  # noqa: E402
 def once(settle_only: bool = False) -> None:
     s, repo = get_settings(), get_repo()
     svc = AnalysisService(s, repo)
-    st = SettlementService(s, repo, svc.espn, svc.odds, svc.allsports, svc.player_stats)
+    st = SettlementService(s, repo, svc.espn, svc.odds, svc.allsports, svc.player_stats, svc.balldontlie)
     print("Settlement:", st.settle_open_wagers(), "| grading:", st.grade_recommendations())
     if settle_only:
         return

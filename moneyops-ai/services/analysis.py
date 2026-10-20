@@ -24,13 +24,14 @@ from agents.statistics_agent import StatisticsAgent
 from agents.verification_agent import VerificationAgent
 from config import MODEL_VERSION, Settings
 from data.allsports_provider import AllSportsProvider
+from data.balldontlie_provider import BallDontLieProvider
 from data.cache import ResponseCache
 from data.odds_provider import OddsApiProvider
 from data.provider_base import ProviderBudgetExceeded, ProviderError, ProviderNotConfigured
 from data.schedules import find_scheduled_game
 from data.schemas import Event
 from data.sports_data_provider import ESPNProvider
-from data.sports_registry import SPORTS, SportConfig, allsports_path, sport_for_odds_key
+from data.sports_registry import SPORTS, SportConfig, allsports_path, balldontlie_path, sport_for_odds_key
 from data.player_stats_provider import PlayerStatsService, lines_to_dicts
 from database.repository import Repository
 from models.backtesting import walk_forward
@@ -60,16 +61,18 @@ class Providers:
     espn: object
     allsports: object
     player_stats: object
+    balldontlie: object = None
 
     def all(self):
-        out = [p for p in (self.odds, self.espn, self.allsports) if p is not None]
+        out = [p for p in (self.odds, self.espn, self.allsports, self.balldontlie) if p is not None]
         return out + (list(self.player_stats.sources.values()) if self.player_stats is not None else [])
 
 
 def build_providers(settings: Settings, repo: Repository) -> Providers:
     cache = ResponseCache(repo.Session)
     return Providers(OddsApiProvider(settings, cache), ESPNProvider(settings, cache),
-                     AllSportsProvider(settings, cache), PlayerStatsService(settings, cache))
+                     AllSportsProvider(settings, cache), PlayerStatsService(settings, cache),
+                     BallDontLieProvider(settings, cache))
 
 
 def _configured(provider) -> bool:
@@ -81,15 +84,18 @@ def _configured(provider) -> bool:
 
 class AnalysisService:
     def __init__(self, settings: Settings, repo: Repository, odds=None, espn=None, allsports=None,
-                 player_stats=None):
+                 player_stats=None, balldontlie=None):
         self.s, self.repo = settings, repo
-        if odds is None or espn is None or allsports is None or player_stats is None:
+        if None in (odds, espn, allsports, player_stats, balldontlie):
             built = build_providers(settings, repo)
             odds, espn = odds or built.odds, espn or built.espn
             allsports = allsports if allsports is not None else built.allsports
             player_stats = player_stats if player_stats is not None else built.player_stats
+            balldontlie = balldontlie if balldontlie is not None else built.balldontlie
         self.odds, self.espn, self.allsports, self.player_stats = odds, espn, allsports, player_stats
-        self.agent1, self.agent2 = ResearchAgent(settings), VerificationAgent(settings, espn, allsports)
+        self.balldontlie = balldontlie
+        self.agent1 = ResearchAgent(settings)
+        self.agent2 = VerificationAgent(settings, espn, allsports, balldontlie)
         self.agent3, self.agent4, self.agent5 = StatisticsAgent(settings), ProbabilityAgent(settings), ChiefAuditor(settings)
         self._active: set = set()
         self._league_keys: dict[str, str] = {}
@@ -140,7 +146,8 @@ class AnalysisService:
 
     def _coverage_row(self, cfg: SportConfig) -> dict:
         sources = (["espn"] if cfg.espn_path else []) + (
-            ["allsportsapi"] if allsports_path(cfg, self.s.allsports_path_overrides) else [])
+            ["allsportsapi"] if allsports_path(cfg, self.s.allsports_path_overrides) else []) + (
+            ["balldontlie"] if balldontlie_path(cfg, self.s.balldontlie_paths) else [])
         return {"sport": cfg.code, "league": cfg.league, "odds_key": cfg.odds_key, "in_season": False,
                 "odds_fetched": False, "events": 0, "independent_schedule": ", ".join(sources) or "none",
                 "history_games": 0, "model": cfg.model or "none", "injuries": cfg.injuries,
@@ -229,6 +236,13 @@ class AnalysisService:
                     row["notes"].append("history from AllSportsAPI (ESPN unavailable)")
                 except ProviderError as exc:
                     row["notes"].append(f"AllSportsAPI history unavailable: {exc}")
+        bdl = balldontlie_path(cfg, self.s.balldontlie_paths)
+        if cfg.model and not ctx.history and bdl and _configured(self.balldontlie):
+            try:
+                ctx.history = self.balldontlie.history(cfg.code, bdl, now, self.s.history_lookback_days)
+                row["notes"].append("history from balldontlie (ESPN unavailable)")
+            except ProviderError as exc:
+                row["notes"].append(f"balldontlie history unavailable: {exc}")
         row["history_games"] = len(ctx.history)
         if cfg.model:
             names = sorted({g.home_team for g in ctx.history} | {g.away_team for g in ctx.history})
@@ -320,7 +334,7 @@ class AnalysisService:
             result.status, result.message = "FAILED", f"Unexpected error: {exc}"
             result.errors.append(repr(exc))
         finally:
-            statuses = [getattr(p, "status", None) for p in (self.odds, self.espn, self.allsports)]
+            statuses = [getattr(p, "status", None) for p in (self.odds, self.espn, self.allsports, self.balldontlie)]
             statuses += list(getattr(self.player_stats, "statuses", []))
             for st in statuses:
                 if st is not None:
@@ -339,6 +353,7 @@ class AnalysisService:
                        "quota_remaining": self.odds.status.quota_remaining,
                        "allsports_requests": getattr(self.allsports, "requests_this_run", None),
                        "player_stats_requests": getattr(self.player_stats, "requests_this_run", None),
+                       "balldontlie_requests": getattr(self.balldontlie, "requests_this_run", None),
                        "as_of": now.isoformat()}
             result.coverage = list(coverage.values())
             self.repo.finish_run(run_id, result.status, summary, result.coverage, result.errors)

@@ -13,6 +13,8 @@ paper_banner()
 s = settings()
 st.markdown(f"**The Odds API key:** {'✅ configured' if s.odds_api_key else '❌ missing'} (value never displayed)  \n"
             f"**AllSportsAPI key:** {'✅ configured' if s.allsports_api_key else '➖ not set (optional)'}  \n"
+            f"**balldontlie key:** {'✅ configured' if s.balldontlie_api_key else '➖ not set (optional)'}"
+            f" (free plan: games only, {s.balldontlie_requests_per_minute} requests/min)  \n"
             f"**ESPN public API:** {'enabled' if s.espn_enabled else 'disabled'} (unofficial, no key; personal research use)  \n"
             f"**nba_api (stats.nba.com, NBA player logs):** {'enabled' if s.nba_api_enabled else 'disabled'}  \n"
             f"**nflreadpy (nflverse, NFL player stats):** {'enabled' if s.nflreadpy_enabled else 'disabled'}")
@@ -53,6 +55,11 @@ st.dataframe(pd.DataFrame([
              "external probabilities, history fallback; football/basketball/tennis/cricket",
      "cost": "Paid plans, 14-day free trial; odds/probability field names unverified until probe_allsports.py runs",
      "used by": "Agents 1, 2, 4; settlement"},
+    {"source": "balldontlie (free plan)",
+     "role": "Games: 3rd independent schedule/status check, 3rd final-score source, backup season results "
+             "(NBA, NFL, MLB, NCAAB, EPL)",
+     "cost": "Free plan: games only, 5 requests/min per sport; stats/injuries need All-Star ($9.99), odds need GOAT",
+     "used by": "Agent 2; settlement; team model fallback"},
     {"source": "nba_api (swar/nba_api 1.11.x -> stats.nba.com)",
      "role": "NBA player game logs for props (one LeagueGameLog request per season); prop settlement",
      "cost": "Free, no key; maintained 2026; unofficial client of the NBA's public stats site",

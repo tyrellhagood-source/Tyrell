@@ -58,6 +58,7 @@ class ScheduledGame:
     neutral_site: bool
     source: str
     retrieved_at: datetime
+    time_known: bool = True     # False when a source gives only the date (no tip-off time)
 
 
 @dataclass(frozen=True)

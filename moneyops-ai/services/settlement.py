@@ -40,9 +40,9 @@ def grade_selection(market: str, side: str, point, home_score: int, away_score: 
 
 
 class SettlementService:
-    def __init__(self, settings, repo, espn=None, odds=None, allsports=None, player_stats=None):
+    def __init__(self, settings, repo, espn=None, odds=None, allsports=None, player_stats=None, balldontlie=None):
         self.s, self.repo = settings, repo
-        self.results = ResultsService(espn, odds, settings, allsports)
+        self.results = ResultsService(espn, odds, settings, allsports, balldontlie)
         self.player_stats = player_stats
         self._cache = {}
 

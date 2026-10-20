@@ -42,6 +42,16 @@ if __name__ == "__main__":
             print(f"[FAIL] AllSportsAPI: {exc}")
     else:
         print("[--] AllSportsAPI: ALLSPORTS_API_KEY not set (optional)")
+    if prov.balldontlie.is_configured():
+        try:
+            games = prov.balldontlie.games("NBA", "v1", utcnow() - timedelta(days=1), utcnow() + timedelta(days=1),
+                                           ttl=0)
+            print(f"[OK] balldontlie: {len(games)} NBA games in the +/-1 day window (free plan)")
+        except ProviderError as exc:
+            ok = False
+            print(f"[FAIL] balldontlie: {exc}")
+    else:
+        print("[--] balldontlie: BALLDONTLIE_API_KEY not set (optional)")
     for module, label in (("nba", "nba_api (stats.nba.com)"), ("nfl", "nflreadpy (nflverse)")):
         src = prov.player_stats.sources[module]
         if not src.is_configured():

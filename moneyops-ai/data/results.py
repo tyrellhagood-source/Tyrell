@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from data.provider_base import ProviderError
 from data.schemas import FinalScore
-from data.sports_registry import SPORTS, allsports_path
+from data.sports_registry import SPORTS, allsports_path, balldontlie_path
 from utils.teams import match_team
 from utils.timeutil import minutes_between
 
@@ -24,8 +24,9 @@ class VerifiedResult:
 
 
 class ResultsService:
-    def __init__(self, espn=None, odds=None, settings=None, allsports=None):
+    def __init__(self, espn=None, odds=None, settings=None, allsports=None, balldontlie=None):
         self.espn, self.odds, self.settings, self.allsports = espn, odds, settings, allsports
+        self.balldontlie = balldontlie
         self._scores_cache: dict[str, dict[str, FinalScore]] = {}
 
     def _espn_final(self, sport_code, home, away, commence: datetime):
@@ -47,6 +48,25 @@ class ResultsService:
                     return None, "ESPN score includes extra time/penalties; 90-minute result needed"
                 return FinalScore(home, away, g.home_score, g.away_score, True, "espn", g.retrieved_at), ""
         return None, "game not found on ESPN"
+
+    def _balldontlie_final(self, sport_code, home, away, commence: datetime):
+        cfg = SPORTS.get(sport_code)
+        if cfg is None or self.balldontlie is None or not self.balldontlie.is_configured():
+            return None, ""
+        path = balldontlie_path(cfg, self.settings.balldontlie_paths if self.settings else ())
+        if not path:
+            return None, ""
+        for g in self.balldontlie.games(cfg.code, path, commence - timedelta(days=1), commence + timedelta(days=1),
+                                        ttl=300):
+            h, _ = match_team(home, [g.home_team])
+            a, _ = match_team(away, [g.away_team])
+            if h and a and abs(minutes_between(g.start_time, commence)) < 36 * 60:
+                if any(w in g.status_detail.lower() for w in ("postpon", "cancel")):
+                    return "POSTPONED", g.status_detail
+                if not g.completed:
+                    return "NOT_FINAL", g.status_detail
+                return FinalScore(home, away, g.home_score, g.away_score, True, "balldontlie", g.retrieved_at), ""
+        return None, "game not found on balldontlie"
 
     def _allsports_final(self, sport_code, home, away, commence: datetime):
         cfg = SPORTS.get(sport_code)
@@ -88,7 +108,8 @@ class ResultsService:
         CONFLICT (never settled automatically)."""
         finals: list[FinalScore] = []
         notes, postponed, not_final = [], [], []
-        for name, fn in (("espn", self._espn_final), ("allsportsapi", self._allsports_final)):
+        for name, fn in (("espn", self._espn_final), ("allsportsapi", self._allsports_final),
+                         ("balldontlie", self._balldontlie_final)):
             try:
                 r, note = fn(sport_code, home, away, commence)
             except ProviderError as exc:
