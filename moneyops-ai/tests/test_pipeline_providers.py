@@ -1,4 +1,4 @@
-"""Pipeline integration with AllSportsAPI and sportsipy TEST DOUBLES."""
+"""Pipeline integration with AllSportsAPI and nba_api TEST DOUBLES."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -7,10 +7,10 @@ from agents.base import AUDIT, PROB, STATS, VERIFY
 from data.allsports_provider import parse_fixture, parse_odds
 from data.odds_provider import parse_odds_response
 from data.provider_base import ProviderStatus
-from data.sportsipy_provider import SportsipyProvider
+from data.player_stats_provider import PlayerStatsService
 from services.analysis import AnalysisService
 from tests.test_pipeline import NOW, FakeESPN, FakeOdds
-from tests.test_sportsipy_props import fake_world
+from tests.test_player_stats import nba_rows, nba_source
 
 
 class FakeAllSports:
@@ -62,7 +62,7 @@ def test_allsports_merge_adds_books_and_second_schedule(base):
     svc = AnalysisService(s, repo, FakeOdds(fx("odds_nba.json")), FakeESPN(fx("espn_scoreboard.json"), fx("espn_injuries.json")),
                           FakeAllSports(fx("allsports_fixtures.json"), _odds_with_fresh_epoch(fx),
                                         {"1001": {"home": 0.62, "draw": 0.0, "away": 0.38}}),
-                          SportsipyProvider(s))
+                          PlayerStatsService(s, sources={}))
     res = svc.run(now=NOW)
     assert res.status == "COMPLETED"
     ml = next(c for c in res.candidates if c.market == "h2h" and c.side == "home")
@@ -81,7 +81,7 @@ def test_cross_provider_disagreement_rejects(base):
     s, repo, fx = base
     svc = AnalysisService(s, repo, FakeOdds(fx("odds_nba.json")), FakeESPN(fx("espn_scoreboard.json"), fx("espn_injuries.json")),
                           FakeAllSports(fx("allsports_fixtures.json"), _odds_with_fresh_epoch(fx, 2.40, 1.60)),
-                          SportsipyProvider(s))
+                          PlayerStatsService(s, sources={}))
     res = svc.run(now=NOW)
     ml = next(c for c in res.candidates if c.market == "h2h" and c.side == "home")
     assert ml.reports[VERIFY].verdict == "REJECTED"
@@ -98,10 +98,10 @@ class PropOdds(FakeOdds):
 
 
 def _prop_service(s, repo, fx, injuries=None):
-    s = s.with_overrides(include_player_props=True, sportsipy_enabled=True)
-    loader, _ = fake_world(n_games=14, star_points=[24, 27, 21, 30, 26, 19, 28, 25, 23, 29, 22, 26, 31, 24],
-                           start=datetime(2026, 9, 1), only_abbr="BOS")
-    sp = SportsipyProvider(s, None, loader, lambda: 0.0, lambda x: None)
+    s = s.with_overrides(include_player_props=True)
+    prev = nba_rows([24, 27, 21, 30, 26, 19, 28, 25, 23, 29, 22, 26, 31, 24], start=datetime(2026, 2, 1))
+    src, _ = nba_source({"2025-26": prev, "2026-27": []})
+    sp = PlayerStatsService(s, sources={"nba": src})
     return AnalysisService(s, repo, PropOdds(fx("odds_nba.json"), fx("odds_nba_props.json")),
                            FakeESPN(fx("espn_scoreboard.json"), injuries or fx("espn_injuries.json")),
                            FakeAllSports({"result": []}, {"result": {}}), sp)
@@ -121,8 +121,8 @@ def test_player_prop_full_pipeline(base):
     assert p4["final_prob_interval"][0] <= p4["final_prob"] <= p4["final_prob_interval"][1]
     assert over.reports[AUDIT].data["gates"]["market_supported"]
     cov = res.coverage[0]
-    assert "sportsipy: 1 team(s)" in cov["prop_logs"]
-    assert any("New York Knicks" in n for n in cov["notes"])     # Knicks logs failed -> reported, not invented
+    assert cov["prop_logs"].startswith("nba_api: ")
+    assert any("New York Knicks" in n for n in cov["notes"])     # no Knicks lines -> reported, not invented
     rec = next(r for r in repo.list_recommendations(res.run_id) if r.market == "player_points" and r.side == "over")
     assert rec.report_json["player"] == "Jayson Tatum"
 

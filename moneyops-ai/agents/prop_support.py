@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from agents.base import Candidate, SportContext
-from data.sportsipy_provider import PROP_STATS
+from data.player_stats_provider import PROP_STATS
 from models.props import player_values
 from utils.teams import normalize_team
 

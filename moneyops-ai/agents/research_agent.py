@@ -135,7 +135,7 @@ class ResearchAgent:
             if not ctx.prop_module:
                 missing.append(f"no player game-log source for {ctx.cfg.code} props")
             elif not logs:
-                missing.append(f"no sportsipy game logs found for {c.description}")
+                missing.append(f"no player game logs found for {c.description}")
         injuries = {}
         if ctx.injuries is not None:
             inj = injuries_for_teams(ctx.injuries, [c.event.home_team, c.event.away_team])
@@ -159,7 +159,7 @@ class ResearchAgent:
             summary += f"; consensus no-vig {c.fair_prob:.3f}"
         return AgentReport(RESEARCH, verdict, round(score, 3), summary, reasons=[], flags=flags, data={
             "sources": sorted({b.provider for b in c.books} | {g.source for g in ctx.history[:1]}
-                              | ({"sportsipy"} if c.is_prop and ctx.prop_logs else set())),
+                              | ({l["source"] for v in ctx.prop_logs.values() for l in v[:1]} if c.is_prop else set())),
             "odds_retrieved_at": c.event.retrieved_at.isoformat(),
             "books": books_table, "n_books": len(c.books), "n_fresh_books": len(fresh),
             "n_complete_books": len(c.fair_by_book), "fair_prob": c.fair_prob, "fair_dispersion": disp,

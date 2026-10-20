@@ -1,6 +1,6 @@
 """Player-prop statistics and probability model.
 
-Data: per-game player lines (sportsipy box scores). Games where the player
+Data: per-game player lines (nba_api for NBA, nflreadpy/nflverse for NFL). Games where the player
 did not appear (or logged 0 minutes in the NBA) are excluded - a prop on a
 player who does not play is void, not a loss.
 

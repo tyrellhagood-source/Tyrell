@@ -11,8 +11,8 @@ Re-derives the critical facts from sources other than the odds feed:
 * historical statistics are dated before the game (no leakage) and recent
   enough to belong to the current season,
 * injury information was actually retrieved,
-* player props: the player appears in his team's recent box scores
-  (sportsipy) and is not listed Out/Doubtful.
+* player props: the player's latest game log (nba_api / nflreadpy) is with
+  one of the two teams, he is playing recently, and is not listed Out/Doubtful.
 
 Verdicts: VERIFIED, REJECTED (contradicting evidence) or INSUFFICIENT_DATA
 (a critical fact could not be checked). Only VERIFIED can be fully approved.
@@ -181,12 +181,12 @@ class VerificationAgent:
         found = [(t, l) for t in teams for l in ctx.prop_logs[t] if normalize_team(l["player"]) == player]
         if not found:
             check("player_on_roster", False, True,
-                  f"{c.description} not found in recent box scores of {', '.join(teams)}")
+                  f"{c.description} not found in recent game logs of {', '.join(teams)}")
             return
         team = max(found, key=lambda x: x[1]["date"])[0]
-        check("player_on_roster", True, True, f"{c.description} plays for {team} (sports-reference box scores)")
+        check("player_on_roster", True, True, f"{c.description} plays for {team} ({found[0][1]['source']})")
         last = max(l["date"] for _, l in found)
-        team_dates = sorted({l["date"] for l in ctx.prop_logs[team]})
+        team_dates = sorted({l["date"] for l in ctx.prop_logs[team] if l["team"] == team})
         missed = sum(1 for d in team_dates[-3:] if d > last)
         check("player_recently_active", missed == 0, False,
               f"last appearance {last}" + (f"; missed team's last {missed} game(s)" if missed else ""))

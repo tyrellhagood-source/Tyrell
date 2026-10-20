@@ -26,14 +26,14 @@ class SportConfig:
     injuries: bool = False
     allsports_path: str | None = None            # AllSportsAPI sport path (football, basketball, tennis, cricket)
     allsports_league: tuple[str, str | None] | None = None   # (league_name, country) resolved via met=Leagues
-    sportsipy: str | None = None                 # sportsipy module (nba, nfl, nhl) for player game logs
+    player_logs: str | None = None               # player game-log source key: "nba" (nba_api), "nfl" (nflreadpy)
 
 
 SPORTS: dict[str, SportConfig] = {s.code: s for s in [
-    SportConfig("NFL", "American Football", "NFL", "americanfootball_nfl", "football/nfl", "gaussian", injuries=True, sportsipy="nfl"),
+    SportConfig("NFL", "American Football", "NFL", "americanfootball_nfl", "football/nfl", "gaussian", injuries=True, player_logs="nfl"),
     SportConfig("NCAAF", "American Football", "NCAA Football (FBS)", "americanfootball_ncaaf",
                 "football/college-football", "gaussian", espn_groups="80"),
-    SportConfig("NBA", "Basketball", "NBA", "basketball_nba", "basketball/nba", "gaussian", injuries=True, allsports_path="basketball", allsports_league=("NBA", "USA"), sportsipy="nba"),
+    SportConfig("NBA", "Basketball", "NBA", "basketball_nba", "basketball/nba", "gaussian", injuries=True, allsports_path="basketball", allsports_league=("NBA", "USA"), player_logs="nba"),
     SportConfig("NCAAB", "Basketball", "NCAA Men's Basketball", "basketball_ncaab",
                 "basketball/mens-college-basketball", "gaussian", espn_groups="50"),
     SportConfig("NCAAW", "Basketball", "NCAA Women's Basketball", "basketball_wncaab",
@@ -42,7 +42,7 @@ SPORTS: dict[str, SportConfig] = {s.code: s for s in [
     SportConfig("MLB", "Baseball", "MLB", "baseball_mlb", "baseball/mlb", "poisson",
                 tie_adds_one=True, max_score=25, injuries=True, allsports_league=("MLB", "USA")),
     SportConfig("NHL", "Ice Hockey", "NHL", "icehockey_nhl", "hockey/nhl", "poisson",
-                tie_adds_one=True, max_score=12, injuries=True, allsports_league=("NHL", "USA"), sportsipy="nhl"),
+                tie_adds_one=True, max_score=12, injuries=True, allsports_league=("NHL", "USA")),
     SportConfig("EPL", "Soccer", "English Premier League", "soccer_epl", "soccer/eng.1", "poisson",
                 has_draw=True, ties_resolved=False, max_score=10, allsports_path="football", allsports_league=("Premier League", "England")),
     SportConfig("MLS", "Soccer", "MLS", "soccer_usa_mls", "soccer/usa.1", "poisson",

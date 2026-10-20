@@ -104,7 +104,7 @@ class ProbabilityAgent:
                                 s.typical_sportsbook_min_bet)
         c.stake = stake["stake"]
         gap = p_model - market * decided
-        method = ("player performance distribution (weighted normal, sportsipy logs)" if c.is_prop
+        method = ("player performance distribution (weighted normal, official game logs)" if c.is_prop
                   else f"{ctx.cfg.model} team-rating model")
         data |= {"method": f"{method} blended with no-vig consensus",
                  "model_prob": p_model, "model_prob_interval": [float(lo_m), float(hi_m)],

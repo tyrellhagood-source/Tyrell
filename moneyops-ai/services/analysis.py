@@ -5,7 +5,7 @@
    AllSportsAPI odds/fixtures/probabilities where configured.
 3. Pull history (ESPN, AllSportsAPI fallback), fit models, backtest (daily).
 4. Pull injuries; Agent 2 fetches independent schedules (ESPN, AllSportsAPI);
-   player game logs for props (sportsipy).
+   player game logs for props (nba_api for NBA, nflreadpy for NFL).
 5. Agents 1-4 per candidate.  6. Agent 5 audit + portfolio.  7. Parlays.
 8. Persist + coverage report.
 Nothing is fabricated: any provider failure is recorded as a coverage gap.
@@ -31,7 +31,7 @@ from data.schedules import find_scheduled_game
 from data.schemas import Event
 from data.sports_data_provider import ESPNProvider
 from data.sports_registry import SPORTS, SportConfig, allsports_path, sport_for_odds_key
-from data.sportsipy_provider import SportsipyProvider, lines_to_dicts
+from data.player_stats_provider import PlayerStatsService, lines_to_dicts
 from database.repository import Repository
 from models.backtesting import walk_forward
 from models.probability import TeamRatingModel
@@ -59,16 +59,17 @@ class Providers:
     odds: object
     espn: object
     allsports: object
-    sportsipy: object
+    player_stats: object
 
     def all(self):
-        return [p for p in (self.odds, self.espn, self.allsports, self.sportsipy) if p is not None]
+        out = [p for p in (self.odds, self.espn, self.allsports) if p is not None]
+        return out + (list(self.player_stats.sources.values()) if self.player_stats is not None else [])
 
 
 def build_providers(settings: Settings, repo: Repository) -> Providers:
     cache = ResponseCache(repo.Session)
     return Providers(OddsApiProvider(settings, cache), ESPNProvider(settings, cache),
-                     AllSportsProvider(settings, cache), SportsipyProvider(settings, cache))
+                     AllSportsProvider(settings, cache), PlayerStatsService(settings, cache))
 
 
 def _configured(provider) -> bool:
@@ -79,14 +80,15 @@ def _configured(provider) -> bool:
 
 
 class AnalysisService:
-    def __init__(self, settings: Settings, repo: Repository, odds=None, espn=None, allsports=None, sportsipy=None):
+    def __init__(self, settings: Settings, repo: Repository, odds=None, espn=None, allsports=None,
+                 player_stats=None):
         self.s, self.repo = settings, repo
-        if odds is None or espn is None or allsports is None or sportsipy is None:
+        if odds is None or espn is None or allsports is None or player_stats is None:
             built = build_providers(settings, repo)
             odds, espn = odds or built.odds, espn or built.espn
             allsports = allsports if allsports is not None else built.allsports
-            sportsipy = sportsipy if sportsipy is not None else built.sportsipy
-        self.odds, self.espn, self.allsports, self.sportsipy = odds, espn, allsports, sportsipy
+            player_stats = player_stats if player_stats is not None else built.player_stats
+        self.odds, self.espn, self.allsports, self.player_stats = odds, espn, allsports, player_stats
         self.agent1, self.agent2 = ResearchAgent(settings), VerificationAgent(settings, espn, allsports)
         self.agent3, self.agent4, self.agent5 = StatisticsAgent(settings), ProbabilityAgent(settings), ChiefAuditor(settings)
         self._active: set = set()
@@ -142,7 +144,7 @@ class AnalysisService:
         return {"sport": cfg.code, "league": cfg.league, "odds_key": cfg.odds_key, "in_season": False,
                 "odds_fetched": False, "events": 0, "independent_schedule": ", ".join(sources) or "none",
                 "history_games": 0, "model": cfg.model or "none", "injuries": cfg.injuries,
-                "player_props": False, "prop_logs": "sportsipy" if cfg.sportsipy else "none",
+                "player_props": False, "prop_logs": {"nba": "nba_api", "nfl": "nflreadpy"}.get(cfg.player_logs, "none"),
                 "allsports": "not used", "backtest": None, "notes": []}
 
     # ------------------------------------------------------- AllSportsAPI
@@ -257,27 +259,32 @@ class AnalysisService:
 
     def _prop_logs(self, ctx: SportContext, events: list[Event], row: dict) -> None:
         prop_events = [e for e in events if any(p.market.startswith("player_") for p in e.prices)]
-        if not prop_events or not ctx.cfg.sportsipy:
+        if not prop_events:
             return
-        if not _configured(self.sportsipy):
-            row["notes"].append("props found but sportsipy disabled (SPORTSIPY_ENABLED=false): no player history")
+        if not ctx.cfg.player_logs:
+            row["notes"].append(f"props found but no player game-log source for {ctx.cfg.code}")
             return
-        ctx.prop_module = ctx.cfg.sportsipy
+        if not self.player_stats.is_configured(ctx.cfg.player_logs):
+            row["notes"].append(f"props found but the {ctx.cfg.player_logs} player-stats source is disabled "
+                                "or not installed: no player history")
+            return
+        ctx.prop_module = ctx.cfg.player_logs
         for ev in prop_events:
             for team in (ev.home_team, ev.away_team):
                 if team in ctx.prop_logs or team in ctx.prop_errors:
                     continue
                 try:
                     ctx.prop_logs[team] = lines_to_dicts(
-                        self.sportsipy.team_player_logs(ctx.prop_module, team, ev.commence_time))
+                        self.player_stats.team_player_logs(ctx.prop_module, team, ev.commence_time))
                 except ProviderBudgetExceeded as exc:
                     ctx.prop_errors[team] = str(exc)
                 except ProviderError as exc:
                     ctx.prop_errors[team] = str(exc)
         n = sum(len(v) for v in ctx.prop_logs.values())
-        row["prop_logs"] = f"sportsipy: {len(ctx.prop_logs)} team(s), {n} player-game lines"
+        src = self.player_stats.sources[ctx.prop_module].name
+        row["prop_logs"] = f"{src}: {len(ctx.prop_logs)} team(s), {n} player-game lines"
         for team, err in ctx.prop_errors.items():
-            row["notes"].append(f"sportsipy {team}: {err}")
+            row["notes"].append(f"{src} {team}: {err}")
 
     def _backtest(self, cfg, ctx, now, row) -> dict | None:
         latest = self.repo.latest_backtests().get(cfg.code)
@@ -313,9 +320,11 @@ class AnalysisService:
             result.status, result.message = "FAILED", f"Unexpected error: {exc}"
             result.errors.append(repr(exc))
         finally:
-            for p in (self.odds, self.espn, self.allsports, self.sportsipy):
-                if p is not None and getattr(p, "status", None) is not None:
-                    self.repo.save_provider_status(p.status)
+            statuses = [getattr(p, "status", None) for p in (self.odds, self.espn, self.allsports)]
+            statuses += list(getattr(self.player_stats, "statuses", []))
+            for st in statuses:
+                if st is not None:
+                    self.repo.save_provider_status(st)
             qualified = [c for c in result.candidates if c.status == "QUALIFIED"]
             q_parlays = [p for p in result.parlays if p["status"] == "QUALIFIED"]
             if result.status == "COMPLETED" and not result.message:
@@ -329,7 +338,7 @@ class AnalysisService:
                        "odds_credits_spent": getattr(self.odds, "credits_spent_this_run", None),
                        "quota_remaining": self.odds.status.quota_remaining,
                        "allsports_requests": getattr(self.allsports, "requests_this_run", None),
-                       "sportsipy_requests": getattr(self.sportsipy, "requests_this_run", None),
+                       "player_stats_requests": getattr(self.player_stats, "requests_this_run", None),
                        "as_of": now.isoformat()}
             result.coverage = list(coverage.values())
             self.repo.finish_run(run_id, result.status, summary, result.coverage, result.errors)

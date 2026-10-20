@@ -70,11 +70,10 @@ class Settings:
     allsports_use_probabilities: bool = True
     allsports_max_requests_per_run: int = 80
     allsports_path_overrides: tuple[str, ...] = ()       # e.g. ("NHL:hockey", "MLB:baseball")
-    # sportsipy (sports-reference.com scraper) - player game logs for props
-    sportsipy_enabled: bool = False
-    sportsipy_max_requests_per_minute: int = 15
-    sportsipy_games_per_team: int = 15
-    sportsipy_max_requests_per_run: int = 150
+    # Player game logs for props: nba_api (stats.nba.com) and nflreadpy (nflverse)
+    nba_api_enabled: bool = True
+    nflreadpy_enabled: bool = True
+    player_stats_games_per_player: int = 30
     http_timeout_seconds: float = 15.0
     http_max_retries: int = 3
     odds_cache_ttl_seconds: int = 300
@@ -142,11 +141,9 @@ class Settings:
             allsports_use_probabilities=_bool("ALLSPORTS_USE_PROBABILITIES", d.allsports_use_probabilities),
             allsports_max_requests_per_run=_int("ALLSPORTS_MAX_REQUESTS_PER_RUN", d.allsports_max_requests_per_run),
             allsports_path_overrides=_tuple("ALLSPORTS_PATH_OVERRIDES", ""),
-            sportsipy_enabled=_bool("SPORTSIPY_ENABLED", d.sportsipy_enabled),
-            sportsipy_max_requests_per_minute=min(19, _int("SPORTSIPY_MAX_REQUESTS_PER_MINUTE",
-                                                           d.sportsipy_max_requests_per_minute)),
-            sportsipy_games_per_team=_int("SPORTSIPY_GAMES_PER_TEAM", d.sportsipy_games_per_team),
-            sportsipy_max_requests_per_run=_int("SPORTSIPY_MAX_REQUESTS_PER_RUN", d.sportsipy_max_requests_per_run),
+            nba_api_enabled=_bool("NBA_API_ENABLED", d.nba_api_enabled),
+            nflreadpy_enabled=_bool("NFLREADPY_ENABLED", d.nflreadpy_enabled),
+            player_stats_games_per_player=_int("PLAYER_STATS_GAMES_PER_PLAYER", d.player_stats_games_per_player),
             http_timeout_seconds=_float("HTTP_TIMEOUT_SECONDS", d.http_timeout_seconds),
             http_max_retries=_int("HTTP_MAX_RETRIES", d.http_max_retries),
             odds_cache_ttl_seconds=_int("ODDS_CACHE_TTL_SECONDS", d.odds_cache_ttl_seconds),

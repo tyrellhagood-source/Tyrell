@@ -42,15 +42,17 @@ if __name__ == "__main__":
             print(f"[FAIL] AllSportsAPI: {exc}")
     else:
         print("[--] AllSportsAPI: ALLSPORTS_API_KEY not set (optional)")
-    if prov.sportsipy.is_configured():
+    for module, label in (("nba", "nba_api (stats.nba.com)"), ("nfl", "nflreadpy (nflverse)")):
+        src = prov.player_stats.sources[module]
+        if not src.is_configured():
+            print(f"[--] {label}: disabled or not installed (optional, for player props)")
+            continue
         try:
-            games = prov.sportsipy.team_games("nba", "Boston Celtics", utcnow())
-            print(f"[OK] sportsipy: Boston Celtics schedule parsed ({len(games)} completed games this season)")
+            n = len(src.lines(utcnow()))
+            print(f"[OK] {label}: {n} player-game lines loaded (current + previous season)")
         except ProviderError as exc:
             ok = False
-            print(f"[FAIL] sportsipy: {exc}")
-    else:
-        print("[--] sportsipy: disabled (set SPORTSIPY_ENABLED=true; optional)")
+            print(f"[FAIL] {label}: {exc}")
     for p in prov.all():
         repo.save_provider_status(p.status)
     sys.exit(0 if ok else 1)

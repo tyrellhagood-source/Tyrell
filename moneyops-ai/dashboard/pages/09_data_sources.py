@@ -14,8 +14,8 @@ s = settings()
 st.markdown(f"**The Odds API key:** {'✅ configured' if s.odds_api_key else '❌ missing'} (value never displayed)  \n"
             f"**AllSportsAPI key:** {'✅ configured' if s.allsports_api_key else '➖ not set (optional)'}  \n"
             f"**ESPN public API:** {'enabled' if s.espn_enabled else 'disabled'} (unofficial, no key; personal research use)  \n"
-            f"**sportsipy (sports-reference.com):** {'enabled' if s.sportsipy_enabled else 'disabled (optional)'}"
-            f" - throttled to {s.sportsipy_max_requests_per_minute} pages/min")
+            f"**nba_api (stats.nba.com, NBA player logs):** {'enabled' if s.nba_api_enabled else 'disabled'}  \n"
+            f"**nflreadpy (nflverse, NFL player stats):** {'enabled' if s.nflreadpy_enabled else 'disabled'}")
 if st.button("Test provider connectivity (1 free Odds API call + 1 ESPN call)"):
     root = Path(__file__).resolve().parents[2]
     out = subprocess.run([sys.executable, str(root / "scripts" / "check_providers.py")], capture_output=True,
@@ -53,9 +53,13 @@ st.dataframe(pd.DataFrame([
              "external probabilities, history fallback; football/basketball/tennis/cricket",
      "cost": "Paid plans, 14-day free trial; odds/probability field names unverified until probe_allsports.py runs",
      "used by": "Agents 1, 2, 4; settlement"},
-    {"source": "sportsipy (roclark/sportsipy -> sports-reference.com)",
-     "role": "Player game logs for props (NBA, NFL, NHL); prop settlement from box scores",
-     "cost": "Free; UNMAINTAINED since 2022 (may break); scraper - respect sports-reference rate limits/terms",
+    {"source": "nba_api (swar/nba_api 1.11.x -> stats.nba.com)",
+     "role": "NBA player game logs for props (one LeagueGameLog request per season); prop settlement",
+     "cost": "Free, no key; maintained 2026; unofficial client of the NBA's public stats site",
+     "used by": "Agents 2, 3, 4 (props); settlement"},
+    {"source": "nflreadpy (nflverse)",
+     "role": "NFL weekly player stats + schedules for props; prop settlement",
+     "cost": "Free, no key; maintained 2026; data published by nflverse after games (may lag ~a day)",
      "used by": "Agents 2, 3, 4 (props); settlement"},
     {"source": "SportsDataIO / Sportradar (not connected)", "role": "Licensed stats, injuries, player logs, odds",
      "cost": "Paid / quote-based", "used by": "Add via data/provider_base.py for commercial use"},

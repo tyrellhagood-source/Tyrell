@@ -54,7 +54,7 @@ class SportContext:
     schedule_errors: dict[str, str] = field(default_factory=dict)              # source -> error
     league_keys: dict[str, str] = field(default_factory=dict)                  # provider -> league id
     external_probs: dict[str, dict] = field(default_factory=dict)              # event_id -> {home, draw, away}
-    prop_module: str | None = None                                             # sportsipy module
+    prop_module: str | None = None                                             # player-log source key (nba/nfl)
     prop_logs: dict[str, list[dict]] = field(default_factory=dict)             # team -> player game lines
     prop_errors: dict[str, str] = field(default_factory=dict)                  # team -> error
     team_map: dict[str, str | None] = field(default_factory=dict)   # odds name -> history name

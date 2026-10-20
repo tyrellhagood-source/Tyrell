@@ -134,7 +134,7 @@ def decline(slip_id: int):
 @app.post("/wagers/settle-verified")
 def settle_verified():
     svc = AnalysisService(get_settings(), get_repo())
-    st = SettlementService(get_settings(), get_repo(), svc.espn, svc.odds, svc.allsports, svc.sportsipy)
+    st = SettlementService(get_settings(), get_repo(), svc.espn, svc.odds, svc.allsports, svc.player_stats)
     return {"wagers": st.settle_open_wagers(), "recommendations": st.grade_recommendations()}
 
 
