@@ -1,0 +1,42 @@
+[
+  {
+    "id": "evt1",
+    "sport_key": "basketball_nba",
+    "sport_title": "NBA",
+    "commence_time": "2026-10-21T23:30:00Z",
+    "home_team": "Boston Celtics",
+    "away_team": "New York Knicks",
+    "bookmakers": [
+      {"key": "draftkings", "title": "DraftKings", "last_update": "2026-10-21T18:00:00Z",
+       "markets": [
+         {"key": "h2h", "last_update": "2026-10-21T18:00:00Z",
+          "outcomes": [{"name": "Boston Celtics", "price": 1.50}, {"name": "New York Knicks", "price": 2.70}]},
+         {"key": "spreads", "last_update": "2026-10-21T18:00:00Z",
+          "outcomes": [{"name": "Boston Celtics", "price": 1.91, "point": -6.5},
+                       {"name": "New York Knicks", "price": 1.91, "point": 6.5}]},
+         {"key": "totals", "last_update": "2026-10-21T18:00:00Z",
+          "outcomes": [{"name": "Over", "price": 1.91, "point": 221.5}, {"name": "Under", "price": 1.91, "point": 221.5}]}
+       ]},
+      {"key": "fanduel", "title": "FanDuel", "last_update": "2026-10-21T18:01:00Z",
+       "markets": [
+         {"key": "h2h", "last_update": "2026-10-21T18:01:00Z",
+          "outcomes": [{"name": "Boston Celtics", "price": 1.52}, {"name": "New York Knicks", "price": 2.62}]},
+         {"key": "spreads", "last_update": "2026-10-21T18:01:00Z",
+          "outcomes": [{"name": "Boston Celtics", "price": 1.95, "point": -6.5},
+                       {"name": "New York Knicks", "price": 1.87, "point": 6.5}]}
+       ]},
+      {"key": "betmgm", "title": "BetMGM", "last_update": "2026-10-21T17:59:00Z",
+       "markets": [
+         {"key": "h2h", "last_update": "2026-10-21T17:59:00Z",
+          "outcomes": [{"name": "Boston Celtics", "price": 1.49}, {"name": "New York Knicks", "price": 2.75}]},
+         {"key": "totals", "last_update": "2026-10-21T17:59:00Z",
+          "outcomes": [{"name": "Over", "price": 1.87, "point": 221.5}, {"name": "Under", "price": 1.95, "point": 221.5}]}
+       ]},
+      {"key": "badbook", "title": "BadBook", "last_update": "2026-10-21T18:00:00Z",
+       "markets": [
+         {"key": "h2h", "last_update": null, "outcomes": [{"name": "Boston Celtics", "price": "x"}]}
+       ]}
+    ]
+  },
+  {"id": "broken", "sport_key": "basketball_nba"}
+]

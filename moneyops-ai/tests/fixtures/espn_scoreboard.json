@@ -1,0 +1,35 @@
+{
+  "events": [
+    {
+      "id": "401",
+      "date": "2026-10-21T23:30Z",
+      "competitions": [
+        {
+          "id": "401",
+          "date": "2026-10-21T23:30Z",
+          "neutralSite": false,
+          "status": {"type": {"state": "pre", "completed": false, "detail": "Tue, October 21st at 7:30 PM EDT"}},
+          "competitors": [
+            {"homeAway": "home", "score": "0", "team": {"displayName": "Boston Celtics", "id": "2"}},
+            {"homeAway": "away", "score": "0", "team": {"displayName": "New York Knicks", "id": "18"}}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "400",
+      "date": "2026-10-19T23:00Z",
+      "competitions": [
+        {
+          "id": "400",
+          "date": "2026-10-19T23:00Z",
+          "status": {"type": {"state": "post", "completed": true, "detail": "Final"}},
+          "competitors": [
+            {"homeAway": "home", "score": {"value": 110.0, "displayValue": "110"}, "team": {"displayName": "Miami Heat"}},
+            {"homeAway": "away", "score": "104", "team": {"displayName": "Orlando Magic"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

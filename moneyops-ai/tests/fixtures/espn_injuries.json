@@ -1,0 +1,6 @@
+{"injuries": [
+  {"displayName": "Boston Celtics", "injuries": [
+    {"status": "Out", "shortComment": "Ankle", "athlete": {"displayName": "Player One"}},
+    {"status": "Probable", "shortComment": "Rest", "athlete": {"displayName": "Player Two"}}]},
+  {"displayName": "New York Knicks", "injuries": []}
+]}
