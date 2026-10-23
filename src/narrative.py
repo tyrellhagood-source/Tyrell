@@ -69,9 +69,12 @@ def generate_summary(route: RouteMetrics, coverage: CoverageMetrics,
                       wr_grade: GradeResult, cb_grade: GradeResult,
                       wr_identity: PlayerIdentity, cb_identity: PlayerIdentity,
                       situation: Situation) -> str:
+    # route_sentence starts with the WR's name (a proper noun) -- don't
+    # lowercase it when splicing onto the situation clause, or a name like
+    # "J. Smith-Njigba" turns into the wrong "j. Smith-Njigba".
     route_sentence = _route_phrase(route, wr_identity.name)
     parts = [
-        f"{_situation_phrase(situation)}, {route_sentence[0].lower()}{route_sentence[1:]}",
+        f"{_situation_phrase(situation)}, {route_sentence}",
         _coverage_phrase(coverage, cb_identity.name),
     ]
     sep_phrase = _separation_phrase(route)
