@@ -46,6 +46,7 @@ import jersey_ocr  # noqa: E402
 import pose_features  # noqa: E402
 import metrics as metrics_mod  # noqa: E402
 import grading  # noqa: E402
+import narrative  # noqa: E402
 import annotate  # noqa: E402
 import report as report_mod  # noqa: E402
 
@@ -106,7 +107,7 @@ def cmd_discover(args):
     os.makedirs(args.out, exist_ok=True)
     print(f"Running detection + tracking ({args.tracker}) on {args.video} ...")
     tracks, fps, frame_size = track_mod.run_tracking(args.video, model_path=args.model, conf=args.conf,
-                                                       tracker=f"{args.tracker}.yaml")
+                                                       tracker=track_mod.resolve_tracker(args.tracker))
 
     tracks_json_path = os.path.join(args.out, "tracks.json")
     with open(tracks_json_path, "w") as f:
@@ -156,7 +157,7 @@ def cmd_grade(args):
     else:
         print(f"Running detection + tracking ({args.tracker}) on {args.video} ...")
         tracks, fps, frame_size = track_mod.run_tracking(args.video, model_path=args.model, conf=args.conf,
-                                                           tracker=f"{args.tracker}.yaml")
+                                                           tracker=track_mod.resolve_tracker(args.tracker))
         with open(tracks_json_path, "w") as f:
             json.dump(track_mod.tracks_to_json(tracks, fps, frame_size), f)
 
@@ -169,17 +170,28 @@ def cmd_grade(args):
     cb_track = tracks[args.cb_track_id]
 
     calibration = None
+    calibration_kind = None
     if args.calibration_points:
         calibration = calibration_mod.FieldCalibration.from_points_file(args.calibration_points)
+        calibration_kind = "homography"
         print(f"Loaded {len(calibration.points)}-point homography calibration from {args.calibration_points} "
               f"(perspective-correct, ~{calibration.yards_per_pixel:.4f} units/px avg).")
     elif args.calibration_px and args.calibration_yards:
         calibration = Calibration(px_distance=args.calibration_px, yard_distance=args.calibration_yards)
+        calibration_kind = "manual-ratio"
         print("Using single-ratio calibration (no perspective correction) -- "
               "prefer --calibration-points (see the 'calibrate' subcommand) when you can.")
+    elif not args.no_auto_calibration:
+        calibration = calibration_mod.estimate_calibration_from_height(wr_track, sport=args.sport)
+        calibration_kind = "auto-height"
+        print(f"No calibration given -- auto-estimating one from the WR's own tracked height "
+              f"(~{calibration_mod.AVG_HEIGHT_YD[args.sport]:.2f} yd assumed, "
+              f"~{calibration.yards_per_pixel:.4f} yd/px). This is approximate (population-average "
+              f"height, no perspective correction) -- pass --calibration-points for a precise number, "
+              f"or --no-auto-calibration to see raw pixel units instead.")
     else:
-        print("NOTE: no calibration given -- speeds/distances will be approximate (pixel-based), not real yards/mph. "
-              "Run 'python run_pipeline.py calibrate --video ... --out ...' to build one.")
+        print("NOTE: no calibration given and --no-auto-calibration set -- speeds/distances will be "
+              "raw pixel units, not real yards/mph.")
 
     if args.sport == "basketball":
         print("ERROR: grading is football-specific right now (WR/CB roles, route/coverage calls, "
@@ -192,7 +204,7 @@ def cmd_grade(args):
     situation = Situation(
         sport=args.sport, down=args.down, distance=args.distance, hash_mark=args.hash_mark,
         offense_formation=args.formation, coverage_call=args.coverage_call,
-        level=args.level, notes=args.notes,
+        wr_alignment=args.wr_alignment, level=args.level, notes=args.notes,
     )
 
     print("Running pose extraction (MediaPipe) on WR + CB tracks ...")
@@ -200,17 +212,23 @@ def cmd_grade(args):
     pose_features.add_pose_to_track(args.video, cb_track)
 
     print("Computing route + coverage metrics ...")
-    route = metrics_mod.classify_route(wr_track, calibration)
+    route = metrics_mod.classify_route(wr_track, calibration, wr_alignment=situation.wr_alignment)
     coverage = metrics_mod.classify_coverage(cb_track, wr_track, calibration)
     if calibration is not None:
         route.separation_at_break_yd = metrics_mod.separation_at(wr_track, cb_track, calibration, route.break_frame)
         route.separation_at_catch_yd = metrics_mod.separation_at(wr_track, cb_track, calibration, wr_track.points[-1].frame)
     else:
         route.notes.append("Separation @ break/catch needs calibration -- skipped (would be pixels, not yards).")
+    if calibration_kind == "auto-height":
+        approx_note = ("Yards/mph are auto-estimated from the WR's tracked height, not a measured "
+                        "calibration -- treat as approximate (population-average height assumed, no "
+                        "perspective correction).")
+        route.notes.append(approx_note)
+        coverage.notes.append(approx_note)
 
     print("Grading ...")
     wr_grade = grading.grade_wr(route, situation)
-    cb_grade = grading.grade_cb(coverage, situation)
+    cb_grade = grading.grade_cb(coverage, situation, route=route)
 
     wr_identity = PlayerIdentity(track_id=args.wr_track_id, role="WR", name=args.wr_name or "WR", number=args.wr_number)
     cb_identity = PlayerIdentity(track_id=args.cb_track_id, role="CB", name=args.cb_name or "CB", number=args.cb_number)
@@ -221,14 +239,17 @@ def cmd_grade(args):
     annotate.render(args.video, out_video, {args.wr_track_id: wr_track, args.cb_track_id: cb_track},
                      identities, route_label=route.route_guess, coverage_label=coverage.technique_guess)
 
+    summary = narrative.generate_summary(route, coverage, wr_grade, cb_grade, wr_identity, cb_identity, situation)
+
     report = report_mod.build_report_dict(situation, wr_identity, cb_identity, route, coverage,
-                                           wr_grade, cb_grade, video_file=os.path.basename(args.video))
+                                           wr_grade, cb_grade, summary, video_file=os.path.basename(args.video))
     json_path = os.path.join(args.out, "report.json")
     html_path = os.path.join(args.out, "report.html")
     report_mod.save_report(report, wr_grade, cb_grade, "annotated.mp4", json_path, html_path)
 
     print(f"\nDone.\n  Annotated video -> {out_video}\n  JSON report     -> {json_path}\n  HTML report     -> {html_path}")
     print(f"\nWR grade: {wr_grade.score}/100 ({wr_grade.letter})   CB grade: {cb_grade.score}/100 ({cb_grade.letter})")
+    print(f"\nSummary: {summary}")
 
 
 def build_parser():
@@ -240,9 +261,12 @@ def build_parser():
     d.add_argument("--out", required=True)
     d.add_argument("--model", default="yolov8n.pt")
     d.add_argument("--conf", type=float, default=0.35)
-    d.add_argument("--tracker", choices=["botsort", "bytetrack"], default="botsort",
+    d.add_argument("--tracker", choices=["botsort", "bytetrack", "botsort-crowd"], default="botsort",
                     help="botsort (default): better ID persistence through contact/occlusion. "
-                         "bytetrack: faster, more ID switches -- useful to A/B against botsort.")
+                         "bytetrack: faster, more ID switches -- useful to A/B against botsort. "
+                         "botsort-crowd: adds appearance (ReID) matching + a longer lost-track buffer "
+                         "for huddles/piles/sideline clusters -- slower, not independently verified "
+                         "against real crowd footage, see config/botsort_crowd.yaml.")
     d.add_argument("--ocr-jerseys", action="store_true",
                     help="Experimental: attempt jersey-number OCR per track (low confidence, see README). "
                          "Off by default since it's slow and often wrong -- use it as a hint, not an answer.")
@@ -260,7 +284,7 @@ def build_parser():
     g.add_argument("--out", required=True)
     g.add_argument("--model", default="yolov8n.pt")
     g.add_argument("--conf", type=float, default=0.35)
-    g.add_argument("--tracker", choices=["botsort", "bytetrack"], default="botsort")
+    g.add_argument("--tracker", choices=["botsort", "bytetrack", "botsort-crowd"], default="botsort")
     g.add_argument("--reuse-tracks", action="store_true", default=True)
     g.add_argument("--sport", choices=["football", "basketball"], default="football")
     g.add_argument("--wr-track-id", type=int, required=True)
@@ -272,6 +296,11 @@ def build_parser():
     g.add_argument("--calibration-points", help="Path to a calibration_points.json from 'calibrate' (preferred -- perspective-correct).")
     g.add_argument("--calibration-px", type=float, help="Fallback: pixel distance of one known real-world distance (e.g. hash-to-hash).")
     g.add_argument("--calibration-yards", type=float, help="That same distance in yards.")
+    g.add_argument("--no-auto-calibration", action="store_true",
+                    help="Disable the default auto-calibration-from-player-height fallback; show raw pixel units instead.")
+    g.add_argument("--wr-alignment", choices=["left", "right"],
+                    help="Which side of the formation the WR lined up on (screen-left/right at the snap). "
+                         "Lets the route classifier tell In vs Out and Post vs Corner apart instead of reporting both.")
     g.add_argument("--down", type=int)
     g.add_argument("--distance", type=int)
     g.add_argument("--hash-mark", choices=["left", "middle", "right"])

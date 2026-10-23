@@ -13,9 +13,10 @@ from schema import PlayerIdentity, Situation
 
 def build_report_dict(situation: Situation, wr_identity: PlayerIdentity, cb_identity: PlayerIdentity,
                        route: RouteMetrics, coverage: CoverageMetrics,
-                       wr_grade: GradeResult, cb_grade: GradeResult, video_file: str) -> dict:
+                       wr_grade: GradeResult, cb_grade: GradeResult, summary: str, video_file: str) -> dict:
     return {
         "video_file": video_file,
+        "summary": summary,
         "situation": asdict(situation),
         "players": {
             "wr": asdict(wr_identity),
@@ -94,11 +95,14 @@ def build_html_report(report: dict, wr_grade: GradeResult, cb_grade: GradeResult
   .muted {{ color:#9aa4af; }}
   .metrics {{ background:#181c22; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:0.92rem; }}
   .metrics b {{ color:#fff; }}
+  .summary {{ background:#161b22; border-left:3px solid #4c8de0; border-radius:6px; padding:14px 18px;
+              margin-bottom:20px; font-size:0.95rem; line-height:1.5; color:#dfe3e8; }}
 </style></head>
 <body>
   <h1>1-on-1 Rep Report</h1>
   <div class="situation">{situation_line}</div>
   <video src="{video_rel_path}" controls></video>
+  <div class="summary">{report.get('summary', '')}</div>
   <div class="metrics">
     <b>Route:</b> {route['route_guess']} (confidence: {route['confidence']})<br>
     <b>Coverage:</b> {coverage['technique_guess']} / {coverage['leverage_guess']}

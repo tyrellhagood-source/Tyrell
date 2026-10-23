@@ -6,12 +6,22 @@ persistent track ID (TID) across frames -- this is the piece that answers
 "can we at least track the two athletes in a 1-on-1 rep".
 
 Default tracker is BoT-SORT, not ByteTrack: it folds in a camera-motion
-compensation step and an appearance-similarity cue on top of ByteTrack's
-motion matching, which holds IDs together noticeably better through the
-kind of contact/occlusion that's constant in football and basketball (two
-players colliding at a break, a screen, a pile). ByteTrack is still
-available (faster, slightly more ID switches) via `tracker="bytetrack.yaml"`
-for anyone who wants to compare the two on their own footage.
+compensation step on top of ByteTrack's motion matching, which holds IDs
+together noticeably better through the kind of contact/occlusion that's
+constant in football and basketball (two players colliding at a break, a
+screen, a pile). ByteTrack is still available (faster, slightly more ID
+switches) via `tracker="bytetrack.yaml"` for anyone who wants to compare
+the two on their own footage.
+
+For genuinely crowded scenes -- a huddle, a sideline cluster, a pile where
+players fully occlude each other for more than a frame or two -- plain
+motion/IoU matching (what both of the above do by default) can still lose
+or swap IDs, because there's no visual signal distinguishing who's who
+once two boxes merge. config/botsort_crowd.yaml turns on BoT-SORT's
+appearance (ReID) matching and a longer lost-track buffer for exactly that
+case; pass tracker=resolve_tracker("botsort-crowd") to use it. Slower
+(an extra model pass per box) and not independently verified against real
+huddle footage -- see that file's own comments.
 
 No training required: YOLOv8's COCO-pretrained weights already detect the
 "person" class well enough for this use case. Jersey-number reading / true
@@ -22,6 +32,7 @@ once via identity.py. That PID then persists even if the underlying TID
 resets (e.g. a player is briefly occluded and the tracker gives them a new
 ID) as long as the human re-links it in the identity map.
 """
+import os
 from collections import defaultdict
 
 from ultralytics import YOLO
@@ -29,6 +40,22 @@ from ultralytics import YOLO
 from schema import Track, TrackPoint
 
 PERSON_CLASS_ID = 0
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "..", "config")
+
+TRACKER_PRESETS = {
+    "botsort": "botsort.yaml",       # ultralytics built-in, GMC only
+    "bytetrack": "bytetrack.yaml",   # ultralytics built-in, fastest
+    "botsort-crowd": os.path.join(CONFIG_DIR, "botsort_crowd.yaml"),  # + ReID, for huddles/piles
+}
+
+
+def resolve_tracker(name: str) -> str:
+    """Maps a short preset name to what ultralytics' model.track(tracker=...)
+    expects: either one of its own built-in config names, or a full path to
+    one of ours (config/botsort_crowd.yaml)."""
+    if name in TRACKER_PRESETS:
+        return TRACKER_PRESETS[name]
+    return name  # already a path/ultralytics name -- pass through
 
 
 def run_tracking(video_path: str, model_path: str = "yolov8n.pt",

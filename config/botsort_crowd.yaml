@@ -1,0 +1,39 @@
+# BoT-SORT tuned for crowded scenes (huddles, piles, sideline clusters)
+# where plain motion/IoU matching struggles because multiple players
+# overlap or fully occlude each other for a few frames.
+#
+# Changes from ultralytics' default botsort.yaml:
+#   - with_reid: True        -- adds an appearance (visual) signature to
+#     track matching, not just motion/IoU. This is the one that actually
+#     matters for a huddle: when two players' boxes overlap or swap
+#     positions, motion alone can't tell them apart, but what they look
+#     like (jersey color/number region) often still can.
+#   - track_buffer: 60       -- keeps a lost track "alive" for longer
+#     before giving up on it (default 30 frames @ 30fps = 1s; a player
+#     fully hidden in a crowd for longer than that needs more patience
+#     before the tracker assigns them a brand new ID when they re-emerge).
+#   - new_track_thresh: 0.35 -- slightly stricter about starting a new
+#     track, to cut down on spurious IDs from momentary false detections
+#     in a dense crowd (more candidate boxes close together = more chances
+#     for a flicker to look like a "new person").
+#
+# NOT independently verified against real huddle/crowd footage (no such
+# clip was available to test against) -- this is a reasoned, documented
+# starting point from the tracker's own semantics, not a tuned-and-proven
+# config. If you use it on real footage, compare its track_summary.json
+# against the default tracker's and see which actually holds IDs better
+# for your footage.
+tracker_type: botsort
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.35
+track_buffer: 60
+match_thresh: 0.8
+fuse_score: True
+
+gmc_method: sparseOptFlow
+
+proximity_thresh: 0.5
+appearance_thresh: 0.75
+with_reid: True
+model: auto

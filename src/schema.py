@@ -57,6 +57,7 @@ class Situation:
     hash_mark: Optional[str] = None  # "left" | "middle" | "right"
     offense_formation: Optional[str] = None
     coverage_call: Optional[str] = None  # if known/self-reported, e.g. "Cover 1" or "switch"
+    wr_alignment: Optional[str] = None  # "left" | "right" -- screen-side at the snap, disambiguates In/Out, Post/Corner
     quarter_or_period: Optional[int] = None  # basketball
     shot_clock: Optional[float] = None  # basketball, seconds remaining
     level: str = "college"  # "high_school" | "college" | "nfl" / "nba" -- used for grading benchmarks

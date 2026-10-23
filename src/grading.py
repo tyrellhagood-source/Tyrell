@@ -71,9 +71,12 @@ def grade_wr(route: RouteMetrics, situation: Situation) -> GradeResult:
     breakdown = {}
     pros, cons, weaknesses = [], [], []
 
-    # 1. Break sharpness (0-100)
+    # 1. Break sharpness (0-100): a 25 degree change is the minimum to even
+    # count as a detected break (see metrics.find_break_point), a ~90 degree
+    # cut is a textbook sharp break and maxes the score; a wide, rounded
+    # break (well under 90) trails off toward it.
     if route.break_angle_deg is not None:
-        sharpness = _clamp(route.break_angle_deg / 100 * 100 + 10)
+        sharpness = _clamp(route.break_angle_deg + 10)
         if sharpness >= 75:
             pros.append("Crisp, sudden direction change at the break.")
         elif sharpness < 45:
@@ -123,7 +126,7 @@ def grade_wr(route: RouteMetrics, situation: Situation) -> GradeResult:
                         breakdown=breakdown, pros=pros, cons=cons, drills=matched_drills)
 
 
-def grade_cb(coverage: CoverageMetrics, situation: Situation) -> GradeResult:
+def grade_cb(coverage: CoverageMetrics, situation: Situation, route: Optional[RouteMetrics] = None) -> GradeResult:
     drills = _load_drills()["cb"]
     breakdown = {}
     pros, cons, weaknesses = [], [], []
@@ -140,15 +143,30 @@ def grade_cb(coverage: CoverageMetrics, situation: Situation) -> GradeResult:
         mirror_score = 60
     breakdown["mirror_transition"] = round(mirror_score, 1)
 
-    # 2. Separation allowed (inverse of what the WR created)
-    if coverage.initial_separation_yd is not None:
-        # use initial separation as a coarse proxy when no explicit "sep allowed" was passed in
+    # 2. Separation allowed DURING the route (at the break/catch -- the same
+    # number the WR side calls "separation created", just scored from the
+    # other side). This used to fall back to initial pre-snap separation
+    # when nothing else was available, but using *only* that conflated
+    # normal off-coverage alignment (a CB lining up with a deliberate 7-yard
+    # cushion isn't a coverage failure) with actual separation allowed
+    # through the route -- the in-route number is the real signal and is
+    # preferred whenever the route metrics have it.
+    in_route_sep_values = []
+    if route is not None:
+        in_route_sep_values = [v for v in (route.separation_at_break_yd, route.separation_at_catch_yd) if v is not None]
+    if in_route_sep_values:
+        sep_allowed = sum(in_route_sep_values) / len(in_route_sep_values)
+    elif coverage.initial_separation_yd is not None:
         sep_allowed = coverage.initial_separation_yd
+    else:
+        sep_allowed = None
+
+    if sep_allowed is not None:
         sep_score = _clamp(100 - (sep_allowed / 4.0 * 100))
         if sep_score >= 70:
             pros.append("Stayed tight to the WR, limiting the throwing window.")
         elif sep_score < 40:
-            cons.append("Allowed too much cushion/separation for the coverage call.")
+            cons.append("Allowed too much separation through the route.")
             weaknesses.append("high_separation_allowed")
     else:
         sep_score = 60

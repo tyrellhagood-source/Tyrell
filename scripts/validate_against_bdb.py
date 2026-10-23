@@ -31,34 +31,44 @@ from collections import Counter, defaultdict
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from schema import Track, TrackPoint  # noqa: E402
+from schema import Calibration, Track, TrackPoint  # noqa: E402
 import metrics as metrics_mod  # noqa: E402
 
 BDB_FPS = 10.0
+# BDB tracking x/y are already real yards on the field, not pixels -- an
+# identity "calibration" (1 unit in = 1 yard out) tells classify_route() to
+# trust them as real units (it otherwise treats calibration=None as "we
+# genuinely don't know the scale", which disables depth-bucketed route
+# naming -- correct for an uncalibrated video track, wrong here).
+IDENTITY_CALIBRATION = Calibration(px_distance=1.0, yard_distance=1.0)
 
-# Our heuristic route_guess strings are free text ("Post / Corner (deep
-# breaking route)"); BDB's routeRan is a fixed vocabulary. This maps BDB
-# labels to the keyword our classifier would need to produce for a "hit".
-# Loose on purpose -- the heuristic was never meant to split hairs between
-# e.g. CORNER and POST, so scoring at this granularity is the fair test.
-ROUTE_LABEL_GROUPS = {
-    "GO": "vertical", "FLAT": "shallow", "SLANT": "shallow", "SCREEN": "shallow",
-    "HITCH": "shallow", "OUT": "shallow", "CROSS": "intermediate", "IN": "intermediate",
-    "ANGLE": "intermediate", "CORNER": "deep", "POST": "deep", "WHEEL": "deep",
+# BDB's routeRan is a fixed vocabulary; classify_route() now returns a
+# machine-readable route_family tag (see metrics.py) instead of just free
+# text, so both sides map onto the same coarse groups. Grouped by
+# depth+trend rather than exact route name: without --wr-alignment this
+# script doesn't tell our classifier which side of the field the WR lined
+# up on, so it can't ask it to split HITCH from a plain shallow OUT, say --
+# scoring at this granularity is the fair test of what it can actually see.
+BDB_ROUTE_GROUPS = {
+    "GO": "vertical",
+    "HITCH": "comeback",
+    "FLAT": "shallow", "SLANT": "shallow", "SCREEN": "shallow", "OUT": "shallow",
+    "CROSS": "intermediate", "IN": "intermediate", "ANGLE": "intermediate",
+    "CORNER": "deep", "POST": "deep", "WHEEL": "deep",
+}
+
+OUR_FAMILY_GROUPS = {
+    "go": "vertical",
+    "hitch": "comeback", "curl": "comeback", "comeback": "comeback",
+    "slant": "shallow", "out": "shallow", "shallow_break": "shallow",
+    "dig": "intermediate", "in": "intermediate", "intermediate_break": "intermediate",
+    "post": "deep", "corner": "deep", "deep_break": "deep",
+    "double_move": "double_move",
 }
 
 
-def _our_group(route_guess: str) -> str:
-    g = route_guess.lower()
-    if "vertical" in g or "go / fade" in g or "seam" in g:
-        return "vertical"
-    if "shallow" in g:
-        return "shallow"
-    if "intermediate" in g:
-        return "intermediate"
-    if "deep" in g:
-        return "deep"
-    return "unknown"
+def _our_group(route_family) -> str:
+    return OUR_FAMILY_GROUPS.get(route_family, "unknown")
 
 
 def build_track(frames_df: pd.DataFrame) -> Track:
@@ -88,7 +98,7 @@ def main():
     player_play = pd.read_csv(play_path)
     if "routeRan" not in player_play.columns:
         print(f"ERROR: player_play.csv has no 'routeRan' column (columns: {list(player_play.columns)}). "
-              "This script was written against the BDB 2024 schema -- adjust ROUTE_LABEL_GROUPS / "
+              "This script was written against the BDB 2024 schema -- adjust BDB_ROUTE_GROUPS / "
               "column names at the top of this file for your year's schema.")
         sys.exit(1)
 
@@ -120,9 +130,9 @@ def main():
             if len(frames) < 8:
                 continue
             track = build_track(frames)
-            route = metrics_mod.classify_route(track, calibration=None)  # BDB coords are already yards
-            predicted_group = _our_group(route.route_guess)
-            true_group = ROUTE_LABEL_GROUPS.get(str(play_row.routeRan).upper(), "unknown")
+            route = metrics_mod.classify_route(track, IDENTITY_CALIBRATION)
+            predicted_group = _our_group(route.route_family)
+            true_group = BDB_ROUTE_GROUPS.get(str(play_row.routeRan).upper(), "unknown")
             if true_group == "unknown":
                 continue
 

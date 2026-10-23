@@ -112,3 +112,51 @@ BASKETBALL_DIMENSIONS_FT = {
     "three_point_radius_ncaa": 22.15,
     "backboard_to_baseline": 4.0,
 }
+
+# Average standing height for skill-position football players (WR/CB/RB,
+# roughly 5'10"-6'3") and basketball guards/wings, in yards. Deliberately a
+# rough population average, not a per-player measurement -- see
+# estimate_calibration_from_height() for the error this introduces.
+AVG_HEIGHT_YD = {
+    "football": 1.85 / 0.9144,   # ~6'1" -> yards
+    "basketball": 1.98 / 0.9144,  # ~6'6" (skews taller than football skill positions) -> yards
+}
+
+
+def estimate_calibration_from_height(track, sport: str = "football", assumed_height_yd: float = None):
+    """Self-calibration with no manual point-picking: uses the tracked
+    player's OWN bounding-box height, frame by frame, as an implicit ruler.
+    A standing adult near the camera's line of sight is roughly as tall as
+    the real-world distance AVG_HEIGHT_YD[sport] -- so (box height in
+    pixels) / (assumed height in yards) gives a yards-per-pixel scale
+    without anyone finding yard-line coordinates by hand.
+
+    This is the right default when no explicit calibration is supplied:
+    it turns route depth / speed / separation from "unknown, pixels only"
+    into a real (if approximate) number for every clip, automatically.
+
+    Honest limitations, by design, not oversight:
+    - It's a population-average height, not this player's actual height --
+      a 5'9" slot receiver or a 6'4" X-receiver will be off by a
+      noticeable fraction either direction. Good enough to classify a
+      route's rough depth bucket (shallow/intermediate/deep) and get a
+      sane order-of-magnitude speed; not good enough to trust a reported
+      number to the inch.
+    - It assumes the bbox height stays a reasonable proxy for distance-to-
+      camera throughout the tracked rep (true for most sideline/elevated
+      broadcast angles over a few seconds; breaks down if the player
+      crouches/dives, is partially occluded, or the camera zooms hard
+      mid-clip -- which is exactly why a single MEDIAN box height is used
+      below instead of a per-frame one, to resist a handful of bad frames).
+    - Like the single-ratio Calibration it returns, it has no perspective
+      correction -- calibrate --sport ... with real field/court points is
+      still the more accurate option when precision matters.
+    """
+    from schema import Calibration
+
+    heights = sorted(p.bbox[3] - p.bbox[1] for p in track.points if p.bbox[3] > p.bbox[1])
+    if not heights:
+        raise ValueError("No valid bounding boxes on this track to estimate a scale from.")
+    median_height_px = heights[len(heights) // 2]
+    height_yd = assumed_height_yd if assumed_height_yd is not None else AVG_HEIGHT_YD[sport]
+    return Calibration(px_distance=median_height_px, yard_distance=height_yd)
