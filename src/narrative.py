@@ -42,8 +42,16 @@ def _route_phrase(route: RouteMetrics, wr_name: str) -> str:
     return base + "."
 
 
+def _lower_first(s: str) -> str:
+    """Lowercase only the leading character, not the whole string -- these
+    source strings can contain embedded acronyms (e.g. "...the WR's break")
+    that a blanket .lower() would wrongly mangle into "wr"."""
+    return s[:1].lower() + s[1:] if s else s
+
+
 def _coverage_phrase(coverage: CoverageMetrics, cb_name: str) -> str:
-    phrase = f"{cb_name} showed {coverage.technique_guess.lower()} technique, playing what looked like {coverage.leverage_guess.lower()}"
+    phrase = (f"{cb_name} showed {_lower_first(coverage.technique_guess)} technique, "
+              f"playing what looked like {_lower_first(coverage.leverage_guess)}")
     return phrase + "."
 
 
@@ -61,7 +69,7 @@ def _grade_phrase(grade: GradeResult, name: str) -> str:
     phrase = f"{name} graded out {grade.score:.0f}/100 ({grade.letter})"
     if lead_factor:
         connector = "held back mainly by" if grade.score < 70 else "driven mainly by"
-        phrase += f", {connector} \"{lead_factor.rstrip('.').lower()}\""
+        phrase += f", {connector} \"{_lower_first(lead_factor.rstrip('.'))}\""
     return phrase + "."
 
 
